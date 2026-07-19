@@ -15,13 +15,18 @@ PrintImposer é uma ferramenta desktop de **imposição de páginas** para impre
 - **Imagem/composição:** Pillow (PIL) — resize LANCZOS, composição RGBA, export PDF/PNG/JPEG/TIFF
 - **Concorrência:** `threading` (geração e preview fora da UI thread)
 - **Distribuição:** script único, rodado com `python print_imposer.py`
-- **Testes:** nenhum automatizado ainda (ver STATUS/ROADMAP). Engine é testável headless via stub de tkinter.
+- **Testes:** `tests/test_engine.py` — 40 testes headless via stub de tkinter. **Não cobrem a GUI**: janela, divisórias e DPI só se validam abrindo o app (ver CLAUDE.md §Smoke test).
+- **SVG (opcional):** `cairosvg` ou `svglib`; ausente, o `.svg` some da lista de formatos.
 
 ## Estrutura do Projeto
 ```
-PrintImposer/
-├── print_imposer.py   # TODO o app em um arquivo (~1190 linhas)
-└── README.md          # Documentação de uso (guia completo)
+printimposer/
+├── print_imposer.py       # TODO o app em um arquivo (~1930 linhas)
+├── tests/test_engine.py   # 40 testes headless do engine (sem abrir janela)
+├── CLAUDE.md              # contrato da raia de validação (Claude Code)
+├── .claude/               # settings.json + comandos /smoke e /wrap
+├── meta/                  # documentação viva (KCM)
+└── README.md              # documentação de uso
 ```
 O arquivo único está organizado em camadas internas (ver Arquitetura).
 
@@ -30,13 +35,15 @@ O arquivo único está organizado em camadas internas (ver Arquitetura).
 - **Comentários:** docstring em função pública; comentário explica o PORQUÊ, não o QUÊ.
 - **Commits:** Conventional Commits, descrição no imperativo curto em PT-BR (`feat(engine): ...`).
 - **Estilo:** legibilidade primeiro; performance só se medida.
+- **Imports/organização:** stdlib → terceiros → locais, com dependência opcional em `try/except ImportError` e degradação elegante (a UI nunca quebra por falta de extra).
+- **Terminal/`.bat`:** conteúdo sem acento — o codepage legado do console do Windows corrompe UTF-8.
 
 ## Como a imposição funciona (CRÍTICO)
 > Mecanismo central. Consultar antes de mexer na composição.
 
 O fluxo de uma folha (`ImpositionEngine.compose_page`):
 1. **Página em px** = `tamanho_mm × DPI / 25.4`. Ex.: A4 a 300 DPI → 2480×3508 px.
-2. **Grid** vem de `NUP_LAYOUTS[nup_key]` → `(cols, rows)`. O nº de slots por folha é `cols×rows`.
+2. **Grid** vem de `cfg.cols × cfg.rows` — grade livre, sem lista cadastrada (DEC-009). Teto em `MAX_COLS`/`MAX_ROWS` (12×12). O nº de slots por folha é `cols×rows`.
 3. **Célula (slot)** = `(largura_página − 2·margem_externa − (cols−1)·margem_entre) / cols`, idem para altura. Tudo em px.
 4. Para cada slot, a imagem é colocada por `_place_image` segundo o modo de **ajuste**:
    - `fit` — cabe inteira, sobra cor de fundo (preserva proporção);
@@ -45,9 +52,11 @@ O fluxo de uma folha (`ImpositionEngine.compose_page`):
 5. **Auto-Rotate**: se a orientação da imagem (retrato/paisagem) ≠ orientação do slot, gira 90°.
 6. **Linhas de corte** (opcional): desenhadas DEPOIS da composição, atravessando a folha entre colunas/linhas. Estilos sólida/tracejada/pontilhada.
 
+**SVG é caso à parte:** em vez de abrir e redimensionar, é **rasterizado já no tamanho da célula** (`open_source` → `rasterize_svg`). Por isso nunca sofre upscale e fica fora da guarda de qualidade. Ver HISTORY §5.
+
 O preview usa o MESMO `compose_page` com `override_dpi=72` e depois reduz — garante fidelidade visual ao resultado final, só que rápido. Ver DEC-004.
 
-A relação **qualidade × DPI**: a folha é rasterizada no DPI escolhido. Se a imagem-fonte tem menos pixels que a célula, há **upscale** (perda). Para A6 a 300 DPI a fonte deve ter ≥ 1240×1748 px. Detalhe completo em HISTORICO §1.
+A relação **qualidade × DPI**: a folha é rasterizada no DPI escolhido. Se a imagem-fonte tem menos pixels que a célula, há **upscale** (perda). Para A6 a 300 DPI a fonte deve ter ≥ 1240×1748 px. Detalhe completo em HISTORY §1.
 
 ## Arquitetura — pontos-chave
 - **Separação Engine × GUI** — `ImpositionEngine` não depende de Tkinter; dá para testar headless. Ver DEC-004.
@@ -55,15 +64,18 @@ A relação **qualidade × DPI**: a folha é rasterizada no DPI escolhido. Se a 
 - **CustomTkinter para a UI** — visual moderno com baixo custo. Ver DEC-002.
 - **Arquivo único** — simplicidade de distribuição. Ver DEC-003.
 - **Linhas de corte atravessam a folha (v1)** — marcas de canto profissionais ficaram para depois. Ver DEC-005.
+- **Grade de layout será livre (`cols × rows`), não uma lista cadastrada** — decidido, a implementar na F2. Ver DEC-009.
+- **Edição de código sai como instrução ASU**, não arquivo inteiro; a raia Claude Code foi dispensada. Ver DEC-007.
 
 ## Armadilhas Conhecidas (o que NÃO fazer)
 > Cada armadilha já custou tempo uma vez. O que parece certo → por que morde → o certo.
 
 1. **Passar um `CTkScrollableFrame` direto para um `tk.PanedWindow`** — parece natural, mas o CTk cria um canvas aninhado que o PanedWindow não adota como filho → `TclError: can't add ...`. → **Envolva em um `tk.Frame` simples** antes do `.add()`. Ver FIX-001.
-2. **Confiar que "exportar 4× no Figma" = 300 DPI** — só vale se o frame-base tiver os pixels certos. → Mire o **alvo em pixels** (≥1240×1748 para A6), não a escala. Ver HISTORICO §1.
+2. **Confiar que "exportar 4× no Figma" = 300 DPI** — só vale se o frame-base tiver os pixels certos. → Mire o **alvo em pixels** (≥1240×1748 para A6), não a escala. Ver HISTORY §1.
 3. **Mexer no DPI dentro de `compose_page` sem restaurar** — o método troca `cfg.dpi` temporariamente para preview; sempre restaure no `finally`/fim. Já está tratado; não remova a restauração.
-4. **Achar que SVG entra direto** — Pillow não rasteriza SVG. → Exporte PNG do Figma, ou (futuro) converta via cairosvg/Inkscape. Ver IDEAS.
-5. **Linhas de corte finas em saída lossless** — inflam o arquivo (detalhe de alta frequência). → Para arquivos enxutos, prefira marcas de canto (futuro) ou borda feita no Figma. Ver DEC-005 e ROADMAP F3.
+4. **Assumir que dependência opcional importada = dependência funcional** — `svglib` importa sem erro mas só desenha com `rlPyCairo`/`_rl_renderPM`. → **Sonde a capacidade com um render real**, não o import, e guarde a referência do módulo. Ver FIX-002.
+5. **Geometria de janela fixa sem clamp e sem DPI awareness** — `geometry("1100x780")` parece inofensivo, mas ignora o tamanho real do monitor e, sem `SetProcessDpiAwareness`, o Windows escala por bitmap em telas com zoom → janela cortada e texto borrado. → Centralize com clamp e declare DPI awareness antes de criar a janela. Ver HISTORY §6.
+6. **Linhas de corte finas em saída lossless** — inflam o arquivo (detalhe de alta frequência). → Para arquivos enxutos, prefira marcas de canto (futuro) ou borda feita no Figma. Ver DEC-005 e ROADMAP F3.
 
 ## Contexto de Produto
 - **Usuário-alvo:** quem produz cards/artes em lote no Figma e imprime em casa ou manda para gráfica.

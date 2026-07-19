@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python tests/test_engine.py)",
+      "Bash(python print_imposer.py)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git log:*)",
+      "Read(./**)",
+      "Edit(print_imposer.py)",
+      "Edit(tests/**)",
+      "Edit(meta/STATUS.md)",
+      "Edit(meta/DECISIONS.md)"
+    ],
+    "deny": [
+      "Edit(meta/CEREBRO.md)",
+      "Edit(INSTRUCOES-DO-PROJETO.md)",
+      "Edit(meta/LOG-TEMPLATE.md)",
+      "Bash(git push:*)"
+    ]
+  }
+}

@@ -4,11 +4,53 @@
 > **Cresce**: entradas novas no topo. Registra só o que foi de fato concluído/entregue.
 
 ## [Não lançado]
+### Adicionado
+- (nada pendente.)
+
+---
+
+## [1.1.0] — 2026-07-19
+Fase **F2 — Controle, persistência e janela** do ROADMAP, completa.
+
+### Adicionado
+- **Grade livre `colunas × linhas`** (DEC-009): qualquer combinação — 2×6, 5×3, 7×2 — sem editar código. A lista fixa `NUP_LAYOUTS` virou um menu de atalhos; o teto é 12×12.
+- Miniatura do grid, desenhada ao vivo, para identificar o layout de relance.
+- **Presets nomeados** em `~/.printimposer/presets.json`: guardam grade + papel + DPI + margens + corte + formato (não guardam caminhos de pasta).
+- **Persistência** em `~/.printimposer/settings.json`: última configuração e geometria da janela voltam ao reabrir.
+- **Guarda de qualidade**: compara os pixels da fonte com a célula no DPI alvo e classifica em OK / atenção / perda visível, com confirmação antes de gerar em caso ruim.
+- **Entrada SVG** (antecipada da F3), com back-end opcional `cairosvg` ou `svglib`: rasteriza na resolução exata da célula — zero upscale por construção.
+- **Segundo destino de saída**: grava a mesma geração em duas pastas de uma vez.
+- Botão **"+ Pasta"**: adiciona todas as imagens suportadas de um diretório, em ordem natural de nome.
+- **Gerador de `.bat`**: cria um atalho que abre a GUI sem janela de console, em ASCII puro e CRLF.
+- Indicador de tamanho da célula em mm e px, ao lado da grade.
+- Suíte headless com **40 testes** (`python tests/test_engine.py`).
+- `CLAUDE.md` e `.claude/` para o Claude Code atuar como raia de validação (DEC-010).
+
+### Modificado
+- **PNG virou o formato de saída padrão** (era PDF) e passou a ser o primeiro da lista.
+- **Pasta de saída padrão agora é Downloads** (era Área de Trabalho), com Desktop e home como reserva.
+- **Pastas de entrada e saída ficaram independentes**: escolher imagens não mexe mais em onde salvar.
+- Janela abre **centralizada e limitada ao monitor**, com DPI awareness no Windows e posição inicial definida para as divisórias.
+- Miniaturas usam `Image.draft()` em JPEG e cache por caminho+mtime.
+- `.gif` entrou na lista de formatos aceitos.
+
+### Corrigido
+- Detecção de back-end de SVG que aceitava `.svg` sem conseguir renderizar, e referência de módulo perdida no probe. Ver FIX-002.
+- `compose_page` passou a restaurar o DPI em `finally`, garantindo a restauração mesmo se a composição levantar exceção.
+
+---
+
+## [1.0.1] — 2026-07-18
 ### Corrigido
 - Crash ao abrir no Windows por incompatibilidade entre `tk.PanedWindow` e `CTkScrollableFrame`: os três painéis (lista, configurações, preview) passaram a ser envolvidos em `tk.Frame` neutro antes de entrar no PanedWindow. Ver FIX-001.
 
 ### Adicionado
-- Kit de documentação de contexto do projeto (CONTEXT, STATUS, DECISIONS, CHANGELOG, IDEAS, ROADMAP, GLOSSARY, HISTORICO, LOG-TEMPLATE, log da sessão).
+- Kit de documentação de contexto do projeto (CONTEXT, STATUS, DECISIONS, CHANGELOG, IDEAS, ROADMAP, GLOSSARY, HISTORY, LOG-TEMPLATE e log de sessão).
+- `.gitignore` (lixo de SO/editor + artefatos Python + saídas locais).
+- `.flatdropignore` — corta `logs/` e `outputs/` do que sobe ao Projeto do Claude.
+
+### Modificado
+- Documentação alinhada ao Kit de Contexto Universal v1.73.0: modo ASU adotado no lugar da raia Claude Code (DEC-007); `HISTORICO.md` renomeado para `HISTORY.md` (DEC-008); Instruções do Projeto enxugadas de 6.892 para 5.350 caracteres.
 
 ---
 

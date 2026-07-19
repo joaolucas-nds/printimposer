@@ -1,0 +1,25 @@
+# .gitignore — lixo de SO/editor + artefatos Python. NAO ignore .claude/, meta/ nem logs/ (versionados de proposito).
+
+# SO / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Build / distribuicao (PyInstaller)
+build/
+dist/
+*.spec
+
+# Saidas e dados locais da ferramenta
+outputs/
+backups/
+*.log

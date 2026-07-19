@@ -8,83 +8,111 @@
 
 ## 💡 Ideias Ativas — Usuário
 
-### 2026-06 — Fluxo "selecionar forma + selecionar imagens + gerar" (esforço mínimo)
-A meta-ideia que guia o produto: depois de exportar os A6 do Figma, só escolher um modo de impressão, selecionar as imagens e gerar — sem reconfigurar nada toda vez. Conecta com presets (.json) e hot folder.
-
 ### 2026-06 — Moldura de 3 fotos (2 horizontais iguais + 1 retrato alta)
-Layout não-uniforme tipo "moldura": duas imagens horizontais de mesmo tamanho e uma retrato ocupando a altura. Hoje o grid é regular (cols×rows); isto exige layout por células de tamanhos diferentes. Candidato a um "modo de layout customizado". Requer planejamento de UI próprio.
+Layout não-uniforme tipo "moldura". Exige células de tamanhos diferentes — outro modelo que o grid regular. Candidato a "modo de layout customizado". **F4.**
+
+### 2026-06 — Fluxo "selecionar forma + selecionar imagens + gerar" (esforço mínimo)
+A meta-ideia que guia o produto: depois de exportar os A6 do Figma, só escolher um modo, selecionar as imagens e gerar. Conecta com presets, persistência e hot folder.
 
 ### 2026-06 — Borda/traço desenhado no Figma como guia de corte
-Em vez de o script desenhar marcas, já desenhar a borda fina dentro do frame no Figma; ao juntar 4, os riscos já vêm prontos. Já é possível hoje e é a recomendação atual para arquivos enxutos. Mantido como prática documentada (CONTEXT/README).
+Em vez de o script desenhar marcas, já desenhar a borda fina no frame. Já é possível hoje e é a recomendação atual para arquivos enxutos. Mantido como prática documentada.
 
 ### 2026-06 — Controle de proporção X/Y das imagens
-Poder ajustar a proporção horizontal/vertical da imagem dentro do slot, além de fit/fill/stretch. Investigar se agrega sobre os três modos atuais ou vira opção avançada.
+Ajustar a proporção horizontal/vertical dentro do slot, além de fit/fill/stretch. Investigar se agrega sobre os três modos ou vira opção avançada.
 
 ### 2026-06 — Níveis de qualidade/compressão configuráveis
-Escolher o grau de compressão da saída (lossless × JPEG com qualidade ajustável). Responde diretamente à dúvida "é compressão mesmo?" — sim. Ver HISTORICO §2. Bom par com a guarda de qualidade.
+Escolher o grau de compressão da saída (lossless × JPEG com qualidade). Ver HISTORY §2. **F3.**
 
 ### 2026-06 — Margem do centro vs. margem das bordas (e encolher a imagem para criar folga)
-Controle separado de espaçamento: aumentar a margem entre as imagens (centro) OU as bordas externas, e, ao aumentar, encolher proporcionalmente as imagens para criar a folga. Hoje há "margem externa" e "entre imagens" em mm; falta a noção de margem por eixo (só horizontal ou só vertical) e o feedback de encolhimento.
+Controle separado: aumentar a margem entre imagens OU as bordas externas, encolhendo a imagem proporcionalmente para criar a folga.
 
 ### 2026-06 — Margem por eixo (só horizontal ou só vertical)
-Permitir definir espaçamento independente em X e em Y (não um valor único "entre imagens"). Extensão natural do item acima.
+Espaçamento independente em X e em Y, em vez de um valor único "entre imagens".
 
 ### 2026-06 — Imprimir direto, sem salvar arquivo
-Mandar para a impressora sem gerar arquivo intermediário. No Windows isso passa por API de impressão (ex.: enviar o PDF para o spooler). Avaliar viabilidade/portabilidade.
-
-### 2026-06 — SVG como entrada
-Aceitar SVG direto. Pillow não rasteriza SVG; exigiria cairosvg ou Inkscape como conversor. Ver HISTORICO §3 para o porquê e o caminho. Mantida ativa, com ressalva de dependência.
+Mandar para a impressora sem arquivo intermediário. No Windows passa por API de impressão/spooler. Avaliar viabilidade.
 
 ---
 
 ## 🤖 Ideias Ativas — Assistente
-> Surgidas da pesquisa profissional de imposição/prepress (HISTORICO §4). Ordenadas ~por relação valor/custo.
 
-### 2026-06-15 — Guarda de qualidade (avisar upscale)
-No preview/geração, comparar pixels da fonte com o tamanho da célula no DPI alvo; se a fonte for menor, avisar que haverá upscale e perda. Baixo custo, alto valor — ataca direto a preocupação "não perder qualidade do Figma". Já no backlog do STATUS.
+### 2026-07-19 — Empacotar o SVG junto (resolver a dependência no Windows)
+Descoberto na implementação: **nenhum dos dois back-ends é Python puro na hora de desenhar** — `cairosvg` quer libcairo, `svglib` quer `rlPyCairo`/`_rl_renderPM` (ver FIX-002). Para o SVG funcionar na máquina do usuário sem dor, avaliar: (a) documentar o `pip install` certo para Windows, (b) embutir as DLLs no .exe da F4, ou (c) um terceiro caminho (`resvg` via binário, Inkscape CLI). Sem isso, o recurso existe mas pode nunca ligar.
 
-### 2026-06-15 — Presets de configuração (.json) salvar/carregar
-Salvar combinações (ex.: "A6→A4 4-up, sem margem, sem corte") e recarregar com um clique. Núcleo do "esforço mínimo". `LayoutConfig` já tem `to_dict`/`from_dict` — falta a UI e a persistência.
+### 2026-07-19 — Refresh imediato do menu de presets
+O `CTkOptionMenu` de presets só reflete um preset recém-salvo depois de reabrir o app: o `configure(values=...)` está sendo feito por varredura frágil da árvore de widgets. Guardar a referência do menu num atributo e atualizar direto. Pequeno, mas é atrito visível.
 
-### 2026-06-15 — Adicionar pasta inteira
-Botão "Adicionar pasta" que varre e inclui todas as imagens suportadas de um diretório, em ordem natural de nome. Menos cliques que multi-seleção.
+### 2026-07-19 — `Image.draft()` também na composição
+Hoje o `draft()` só acelera a miniatura. Na composição, quando a célula é bem menor que a fonte JPEG, o mesmo truque cortaria tempo de decodificação sem perda perceptível — o alvo já é uma redução. Medir antes de adotar.
 
-### 2026-06-15 — Lembrar últimas configurações e última pasta
-Persistir o último estado (config + pasta de saída) entre execuções, em um `~/.printimposer.json`. Reduz reconfiguração.
+### 2026-07-19 — Aviso de grade absurda
+O teto de 12×12 impede o extremo, mas 10×10 num A4 dá células de ~20 mm: tecnicamente válido, quase sempre inútil. A guarda de qualidade já avisa por causa do upscale, mas um aviso explícito de "célula muito pequena para impressão" seria mais direto.
+
+### 2026-07-18 — Entrada PDF (vetorial) — irmã da entrada SVG
+O Figma exporta PDF. PDF de entrada tem o mesmo ganho do SVG (rasterizar na resolução exata da célula, zero upscale) e é o degrau natural para a imposição vetorial. Tratar SVG e PDF como a mesma família de entrada.
+
+### 2026-07-18 — Formatos de entrada extras de baixo custo
+`pillow-heif` (HEIC/AVIF, fotos de celular) e GIF/ICO já suportados pelo Pillow. Custo quase zero, cobre "arrastei o que tinha na pasta".
+
+### 2026-07-18 — Barra de estado com o "custo" da folha
+Mostrar, ao vivo: tamanho final em px, MB estimados e um selo verde/amarelo/vermelho de qualidade. Transforma DPI e upscale em algo visível antes de gerar.
 
 ### 2026-06-15 — Drag-and-drop de arquivos na janela
-Arrastar imagens do Explorer para a lista. Viável via `tkinterdnd2` com wrapper de classe sobre `CTk` (confirmado na comunidade CustomTkinter). Dependência externa opcional — degradar com elegância se ausente.
+Arrastar do Explorer para a lista, via `tkinterdnd2` com wrapper sobre `CTk`. Dependência opcional — degradar com elegância se ausente.
 
 ### 2026-06-15 — Marcas de corte de canto (padrão de indústria)
-Substituir/complementar as linhas que atravessam a folha por ticks curtos nos cantos de cada slot, dentro do gutter. Mais profissional e quase sem peso no arquivo. Requer gutter mínimo. Par natural do caminho vetorial (F3).
+Ticks curtos nos cantos de cada slot, dentro do gutter, em vez de linhas atravessando a folha. Mais profissional e quase sem peso no arquivo. **F3.**
 
 ### 2026-06-15 — Sangria (bleed) configurável
-Campo de bleed em mm: a arte transborda o limite de corte para evitar borda branca após o corte. Para cards sem borda é importante. Define como o slot recorta/estende a imagem.
+Campo em mm: a arte transborda o limite de corte para evitar borda branca depois do corte. **F3.**
 
 ### 2026-06-15 — Reordenar a lista arrastando
-Drag-and-drop interno para reordenar imagens (hoje só ↑↓). Melhora a UX quando há muitos itens.
+Drag-and-drop interno (hoje só ↑↓). Melhora a UX com muitos itens.
 
 ### 2026-06-15 — Rotação manual por imagem
-Toggle 90° por item, além do Auto-Rotate global, para casos em que o automático não acerta a intenção.
+Toggle 90° por item, além do Auto-Rotate global.
 
 ### 2026-06-15 — Preenchimento automático para N folhas
-Modo "preencher X folhas": dada uma seleção, repetir as imagens para completar exatamente X folhas (ou "repetir até encher a última"). Acelera tiragens.
+"Repetir até encher a última folha" ou "preencher exatamente X folhas". Acelera tiragens.
 
-### 2026-06-15 — Entrada vetorial (PDF) → imposição vetorial *(grande)*
-Aceitar PDFs do Figma e posicioná-los vetorialmente (pypdf/reportlab), preservando qualidade perfeita e gerando arquivos minúsculos. É o maior salto de qualidade possível e resolve junto o peso das marcas. Mudança de arquitetura — fase própria no ROADMAP (F3).
-
-### 2026-06-15 — Escolha de compressão na saída
-Expor lossless × JPEG (com slider de qualidade) na geração; avaliar `img2pdf` para PDF. Implementa o desejo do usuário de "níveis de compressão" de forma explícita e consciente.
+### 2026-06-15 — Entrada vetorial → imposição vetorial *(grande)*
+Posicionar PDFs vetorialmente (pypdf/reportlab) em vez de rasterizar: qualidade perfeita, arquivos minúsculos, marcas sem peso. Mudança de arquitetura. **F3.**
 
 ### 2026-06-15 — Empacotar como .exe (PyInstaller)
-Distribuir um executável Windows para quem não tem Python. `tkinterdnd2` tem hook próprio para PyInstaller. Facilita adoção.
+Executável Windows para quem não tem Python. **F4.**
+
+---
+
+## 🔧 Feedback para o Kit
+> Desvios estruturais e atritos do KCM observados neste projeto. É o material que volta para evoluir o kit.
+
+- **2026-07-18 — `HISTORICO.md` → `HISTORY.md`.** O kit v1.73 padronizou o nome em inglês; o projeto nasceu com o nome em PT. Renomeado nesta sessão (ver DEC-008). Atrito de uma vez só, mas vale o kit sinalizar a renomeação em updates futuros.
+- **2026-07-18 — Template-update veio com `Code nao` e apagaria a raia Code.** O pacote genérico não sabe quais modos o projeto tinha ligados; adotá-lo cru teria removido 67 linhas de comportamento. O protocolo de "reportar, não aplicar" funcionou — mas o manifesto poderia avisar explicitamente quais seções o update REMOVE em relação ao vivo.
+- **2026-07-18 — `DECISOES.md` × `DECISIONS.md` no CEREBRO.** A raia Code do kit referenciava `meta/DECISOES.md` em 3 pontos, enquanto o arquivo real é `DECISIONS.md`. Inconsistência do próprio template; resolvida ao remover a seção.
+- **2026-07-18 — Seções «Feedback para o Kit» e «Feedback para o ASU» não estão no template do IDEAS.** O CEREBRO exige as duas, mas o `IDEAS__template-update.md` não as traz — quem gera o IDEAS do zero pelo template nasce sem elas (foi o que aconteceu aqui). Sugestão: incluí-las no molde.
+- **2026-07-18 — Instruções do template chegam em 6.892 de 6.900 caracteres.** Zero folga para especializar. Enxugadas para 5.350 nesta sessão cortando descrições que já vivem no CEREBRO. Sugestão: o molde já entregar as descrições curtas.
+
+## 🔩 Feedback para o ASU
+> Limitações e pedidos de melhoria da ferramenta, observados em uso.
+
+- **2026-07-19 — A F2 não usou ASU, e o motivo vale registrar.** A entrega tocou constantes, `LayoutConfig`, o engine, três painéis e o `main()`. Um patch com 15+ âncoras num arquivo em reestruturação é frágil e não dá para verificar sem aplicar. Foi entregue arquivo inteiro, como a DEC-007 prevê para reescrita profunda. **O ASU passa a ser o caminho natural agora**: com a 1.1.0 estabilizada, os próximos ajustes são localizados (ex.: o refresh do menu de presets) — exatamente o caso dele.
 
 ---
 
 ## ✅ Concluídas
 > Ideia que virou realidade. Mantida aqui para histórico (com referência à versão/decisão).
-- **Imposição N-up de imagens em folhas com preview e saída multi-formato** — implementada em 1.0.0.
-- **Auto-Rotate de imagens conforme orientação do slot** — implementada em 1.0.0.
+- **Grade livre `cols × rows` pela interface** — implementada na 1.1.0 (DEC-009). Resolve o 2×6 sem editar código.
+- **Persistência de configuração e presets nomeados** — implementada na 1.1.0 (`~/.printimposer/`).
+- **Janela centralizada, com clamp e DPI awareness** — implementada na 1.1.0.
+- **Pasta de saída em Downloads; entrada e saída independentes; segundo destino** — implementados na 1.1.0.
+- **PNG como formato padrão** — implementado na 1.1.0.
+- **Entrada SVG** — implementada na 1.1.0, antecipada da F3 (zero upscale por construção).
+- **Gerador de `.bat` da GUI** — implementado na 1.1.0 (ASCII puro, CRLF, sem console).
+- **Guarda de qualidade (aviso de upscale)** — implementada na 1.1.0.
+- **Miniatura do grid** e **botão "+ Pasta"** — implementados na 1.1.0.
+- **Otimização segura de carregamento** — `Image.draft()` em JPEG + cache de miniatura, na 1.1.0.
+- **Imposição N-up com preview e saída multi-formato** — implementada em 1.0.0.
+- **Auto-Rotate conforme orientação do slot** — implementada em 1.0.0.
 - **Linhas de corte com estilo/espessura/cor** — implementada em 1.0.0 (forma de canto fica para F3, ver DEC-005).
 - **Quantidade por imagem (step-and-repeat básico)** — implementada em 1.0.0.
 
@@ -92,4 +120,6 @@ Distribuir um executável Windows para quem não tem Python. `tkinterdnd2` tem h
 
 ## 🚫 Descartadas
 > Ideia avaliada e recusada. O motivo evita reabrir a discussão depois.
-- **SVG como formato de saída** — descartada porque, com imagens raster compostas, o SVG só embutiria os rasters (nenhum ganho de qualidade ou tamanho); o caminho correto para qualidade vetorial é PDF vetorial de entrada (ver ideia do assistente / F3). *(Entrada SVG continua ativa; é a saída SVG que foi descartada.)*
+- **SVG como formato de saída** — com arte raster, o SVG só embutiria os bitmaps: nenhum ganho de qualidade ou tamanho. O caminho para qualidade vetorial é a entrada PDF (F3). *(Entrada SVG continua ativa.)*
+- **Raia de desenvolvimento no Claude Code** — descartada como modo padrão em 2026-07-18 (DEC-007): o projeto é um arquivo único, sem build e sem suíte, onde a cerimônia do Code (CLAUDE.md, `.claude/`, specs) custa mais do que rende. Substituída pelo ASU. *Gatilho de reabertura registrado na DEC-007.*
+- **Cadastro de layouts em lista JSON editável pela UI** — substituído pela grade livre `cols × rows` + presets nomeados, que resolve o mesmo problema sem construir um editor de lista. *(A persistência em JSON continua — o que caiu foi a lista de layouts como estrutura.)*

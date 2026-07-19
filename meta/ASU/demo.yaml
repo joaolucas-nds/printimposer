@@ -1,0 +1,122 @@
+# Instrução de DEMONSTRAÇÃO — executável de ponta a ponta.
+#
+# Diferente de exemplo_instrucao.yaml (ilustrativo, com caminhos fictícios),
+# esta instrução aponta para arquivos REAIS em examples/demo_project/ e foi
+# feita para você rodar de verdade:
+#
+#   python -m src validate examples\demo.yaml
+#   python -m src apply    examples\demo.yaml --root examples\demo_project --dry-run
+#   python -m src apply    examples\demo.yaml --root examples\demo_project
+#   python -m src rollback <TIMESTAMP> --root examples\demo_project
+#
+# Cobre os quatro tipos de arquivo + criação de arquivo, com path_mode relative.
+
+format_version: "1.0"
+generated_by: "claude"
+generated_at: "2026-06-10T01:00:00"
+description: "Demo: trata divisão por zero (Python), reescreve seção (Markdown), ajusta config (JSON), corrige JS por contexto e cria um módulo novo."
+
+settings:
+  backup: true
+  dry_run: false
+  stop_on_error: true
+  encoding: "utf-8"
+
+files:
+  # ── Python (libcst): substitui um MÉTODO dentro da classe ──────────────────
+  - id: "f_calc"
+    path_mode: "relative"
+    relative_path: "src/calculator.py"
+    type: "python"
+    modifications:
+      - id: "m1"
+        description: "Faz divide() tratar divisão por zero"
+        strategy: "replace_method"
+        location:
+          class_name: "Calculator"
+          name: "divide"
+        new_content: |
+          def divide(self, a, b):
+              """Divide a por b, com proteção contra divisão por zero."""
+              if b == 0:
+                  raise ValueError("Divisão por zero não é permitida")
+              return a / b
+
+  # ── Markdown: substitui a seção "## Configuração" inteira ──────────────────
+  - id: "f_readme"
+    path_mode: "relative"
+    relative_path: "README.md"
+    type: "markdown"
+    modifications:
+      - id: "m1"
+        description: "Reescreve a seção de Configuração"
+        strategy: "replace_section"
+        location:
+          heading: "## Configuração"
+          include_heading: true
+        new_content: |
+          ## Configuração
+
+          Defina as variáveis no arquivo `.env`:
+          - `LOG_LEVEL`: nível de log (DEBUG, INFO, WARNING). Padrão: INFO.
+          - `SECRET_KEY`: chave secreta da aplicação. Obrigatória.
+
+  # ── JSON (jmespath): set + append + delete ─────────────────────────────────
+  - id: "f_cfg"
+    path_mode: "relative"
+    relative_path: "config.json"
+    type: "json"
+    modifications:
+      - id: "m1"
+        description: "Sobe a versão da app"
+        strategy: "set_json_path"
+        location:
+          path: "app.version"
+        value: "2.0.0"
+      - id: "m2"
+        description: "Adiciona uma feature ao array"
+        strategy: "append_json_array"
+        location:
+          path: "features"
+        value: "logging"
+      - id: "m3"
+        description: "Remove flag legada"
+        strategy: "delete_json_path"
+        location:
+          path: "legacy.deprecated_flag"
+
+  # ── JavaScript via TEXTO: mecanismo universal (independe da linguagem) ─────
+  - id: "f_js"
+    path_mode: "relative"
+    relative_path: "web/app.js"
+    type: "text"
+    language: "javascript"
+    modifications:
+      - id: "m1"
+        description: "Reescreve o corpo de initApp usando janela de contexto (só o miolo entre as âncoras)"
+        strategy: "replace_context_block"
+        location:
+          before: "function initApp() {"
+          after: "}"
+          occurrence: 1
+        new_content: |2
+            console.log("App iniciado");
+            setupRoutes();
+            return true;
+
+  # ── Criação de arquivo novo (create_file) ──────────────────────────────────
+  - id: "f_new"
+    path_mode: "relative"
+    relative_path: "src/health.py"
+    type: "python"
+    modifications:
+      - id: "m1"
+        description: "Cria um módulo de health-check do zero"
+        strategy: "create_file"
+        content: |
+          """Health-check simples da aplicação (criado pela demo)."""
+
+
+          def is_healthy() -> bool:
+              """Retorna True se a aplicação está operacional."""
+              return True

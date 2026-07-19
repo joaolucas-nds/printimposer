@@ -7,6 +7,11 @@
 
 ---
 
+## Como usar
+Cada decisão recebe um ID sequencial (DEC-001, DEC-002…) e segue o formato abaixo (ADR simplificado). Bugs graves usam FIX-001, FIX-002… com sintoma/causa/solução/lição.
+
+---
+
 ## DEC-001 — Imposição raster via Pillow (não vetorial) no v1
 **Data:** 2026-06-02 · **Status:** aceita
 
@@ -17,14 +22,14 @@ A entrada são imagens (PNG do Figma). Era preciso escolher entre compor as folh
 v1 compõe cada folha como uma imagem PIL e exporta (PDF/PNG/JPEG/TIFF) a partir dela.
 
 ### Alternativas consideradas
-- **PDF vetorial (reportlab/pypdf posicionando páginas PDF)** — preserva qualidade perfeita e gera arquivos minúsculos, mas exige entrada em PDF/vetor e mais complexidade. Adiado para o ROADMAP (F3) como o maior salto de qualidade futuro.
+- **PDF vetorial (reportlab/pypdf posicionando páginas PDF)** — preserva qualidade perfeita e gera arquivos minúsculos, mas exige entrada em PDF/vetor e mais complexidade. Adiado para o ROADMAP (F3).
 - **Render via navegador/HTML→PDF** — overkill, dependência pesada.
 
 ### Consequências
 - Simples e direto para entrada em imagem; o que se vê no preview é exatamente o que sai.
 - Qualidade limitada pelo DPI de rasterização e pelos pixels da fonte (risco de upscale).
 - Linhas finas e marcas inflam o arquivo em saída lossless (ver DEC-005).
-- Abre a porta para a dúvida do usuário sobre "compressão": a folha é reamostrada no DPI escolhido — daí a importância da guarda de qualidade (STATUS backlog) e do caminho vetorial futuro.
+- Motiva a guarda de qualidade (F2) e o caminho vetorial (F3).
 
 ---
 
@@ -43,9 +48,9 @@ Usar CustomTkinter (sobre Tkinter), tema escuro.
 - **Web (Electron/PyWebView)** — distribuição e footprint piores para o caso.
 
 ### Consequências
-- Visual agradável com pouco esforço; widgets prontos (OptionMenu, ScrollableFrame, ProgressBar).
-- Herda limitações do Tkinter e algumas incompatibilidades de aninhamento (ver FIX-001).
-- Drag-and-drop de arquivos exige extensão externa (tkinterdnd2) com wrapper — viável, planejado em IDEAS.
+- Visual agradável com pouco esforço; widgets prontos.
+- Herda limitações do Tkinter e incompatibilidades de aninhamento (ver FIX-001) e de DPI no Windows (F2).
+- Drag-and-drop exige extensão externa (`tkinterdnd2`).
 
 ---
 
@@ -62,8 +67,9 @@ Todo o app em `print_imposer.py`.
 - **Pacote multi-módulo** — mais organizado para crescer, porém atrito para distribuir/rodar.
 
 ### Consequências
-- Fácil de copiar e executar (`python print_imposer.py`).
-- Se o projeto crescer muito (entrada vetorial, i18n, perfis), pode valer modularizar — reavaliar em F3.
+- Fácil de copiar e executar.
+- Reavaliar se a F3 (entrada vetorial) chegar: aí o arquivo único pode passar do ponto.
+- Reforça DEC-007: sem build e com um arquivo só, a cerimônia do Claude Code não se paga.
 
 ---
 
@@ -81,8 +87,9 @@ Lógica de composição precisa ser confiável e, idealmente, testável sem abri
 
 ### Consequências
 - Dá para testar o engine com um stub de tkinter (já validado nesta forma).
-- Preview e geração final compartilham o mesmo caminho de código → o preview é fiel.
-- Custo: o engine troca `cfg.dpi` temporariamente no preview; exige restaurar o valor (armadilha registrada em CONTEXT §3).
+- Preview e geração final compartilham o mesmo caminho → o preview é fiel.
+- **Assimetria importante:** o engine é testável no chat, a GUI **não é** — nenhum bug de interface é pego aqui (foi a origem do FIX-001).
+- Custo: o engine troca `cfg.dpi` temporariamente no preview; exige restaurar o valor.
 
 ---
 
@@ -90,19 +97,18 @@ Lógica de composição precisa ser confiável e, idealmente, testável sem abri
 **Data:** 2026-06-02 · **Status:** aceita
 
 ### Contexto
-Para guiar o corte manual, era preciso algum tipo de marca. O padrão profissional são marcas de canto (ticks curtos no gutter), mas são mais trabalhosas de posicionar.
+Para guiar o corte manual, era preciso algum tipo de marca. O padrão profissional são marcas de canto (ticks curtos no gutter), mais trabalhosas de posicionar.
 
 ### Decisão
 v1 desenha linhas contínuas entre colunas e linhas, atravessando a folha (sólida/tracejada/pontilhada).
 
 ### Alternativas consideradas
-- **Marcas de corte de canto (padrão de indústria)** — não atravessam a arte, pesam quase nada no arquivo, mais profissionais. Exigem cálculo por slot e um gutter mínimo. Adiado para ROADMAP F3.
-- **Sem marcas, confiando na borda feita no Figma** — já é uma alternativa válida hoje (o usuário pode desenhar a borda no frame).
+- **Marcas de corte de canto** — não atravessam a arte, pesam quase nada, mais profissionais. Exigem cálculo por slot e gutter mínimo. Adiado para F3.
+- **Sem marcas, confiando na borda feita no Figma** — já é alternativa válida hoje.
 
 ### Consequências
-- Funciona e é simples; cobre o caso "quero uma guia visual".
-- Linhas atravessando a arte e em saída lossless aumentam o tamanho do arquivo (ver DEC-001).
-- Marcas de canto profissionais + caminho vetorial (F3) resolvem qualidade e peso de uma vez.
+- Funciona e é simples.
+- Linhas atravessando a arte e em saída lossless aumentam o tamanho do arquivo.
 
 ---
 
@@ -110,26 +116,121 @@ v1 desenha linhas contínuas entre colunas e linhas, atravessando a folha (sóli
 **Data:** 2026-06-02 · **Status:** aceita
 
 ### Contexto
-Era preciso um formato "manda pra gráfica / imprime direto". PDF é o candidato natural.
+Era preciso um formato "manda pra gráfica / imprime direto".
 
 ### Decisão
 Gerar PDF a partir das imagens compostas via `PIL.Image.save(..., "PDF", resolution=dpi)` (multipágina com `append_images`).
 
 ### Alternativas consideradas
 - **reportlab** — controle fino de PDF, mas para folha já rasterizada não agrega sobre o save do PIL.
-- **img2pdf** — embute bytes da imagem sem recompressão (ótimo para qualidade), porém o nosso caso compõe uma imagem nova por folha, então o ganho é menor; vale avaliar para escolher compressão explícita.
+- **img2pdf** — embute bytes sem recompressão; vale avaliar quando a escolha de compressão entrar (F3).
 
 ### Consequências
 - Caminho mais curto para PDF multipágina.
-- Não expõe escolha de compressão (lossless × JPEG/qualidade) — exatamente a dúvida do usuário sobre "níveis de compressão". Registrar como melhoria (IDEAS) e tratar em F2/F3.
+- Não expõe escolha de compressão — tratado em F3.
+
+---
+
+## DEC-007 — Modo ASU no lugar da raia de desenvolvimento no Claude Code
+**Data:** 2026-07-18 · **Status:** aceita
+
+### Contexto
+O CEREBRO trazia uma raia "chat ↔ Claude Code" (specs em `meta/specs/`, `CLAUDE.md`, `.claude/`, build e commit pelo agente). O template-update v1.73.0 chegou sem essa raia e com a seção "Saída de código via ASU (patch)". Era preciso escolher um método para editar arquivos existentes sem reescrevê-los inteiros.
+
+### Decisão
+Adotar o **ASU** (instrução `.yaml` para baixar) como método padrão de edição, e remover a raia Claude Code do CEREBRO. Geração de arquivo novo e reescrita profunda continuam como **arquivo inteiro para baixar** (modo vanilla do KCM).
+
+### Alternativas consideradas
+- **Manter a raia Claude Code** — os benefícios reais do Code (rodar build, rodar suíte, editar muitos arquivos, commitar) não se aplicam: o projeto é **um arquivo**, **sem build** e **sem suíte**. A raia nunca foi montada — o repo não tem `CLAUDE.md` nem `.claude/`. Custo de cerimônia sem contrapartida.
+- **Manter os dois** — duas fontes de verdade para "como editar código" é exatamente o tipo de duplicação que a higiene do kit proíbe.
+- **Só arquivo inteiro (vanilla puro)** — honesto, mas `print_imposer.py` tem ~1190 linhas: reentregar tudo a cada ajuste custa caro em token e aumenta o risco de regressão por reescrita.
+
+### Consequências
+- O ASU já está instalado e documentado no conhecimento do Projeto (`INSTRUCTION_GUIDE.md`, `PROMPT_IA.md`, `GUIA_PASSO_A_PASSO.md`, `demo.yaml`) — adoção sem custo de setup.
+- Some do CEREBRO a inconsistência `DECISOES.md` × `DECISIONS.md`, que só existia dentro da raia Code.
+- **Ponto cego assumido:** o chat **não executa a GUI**. Bugs de runtime de interface (como o FIX-001) continuam passando. Mitigação atual: entregar dizendo o que abrir e conferir.
+- **Gatilho de reabertura:** se aparecerem 2+ bugs de runtime de GUI que o chat não pegou, ou se o projeto modularizar em F3, reavaliar o Claude Code — ele roda o app e vê o traceback, coisa que o chat não faz.
+
+---
+
+## DEC-008 — `HISTORICO.md` renomeado para `HISTORY.md`
+**Data:** 2026-07-18 · **Status:** aceita
+
+### Contexto
+O projeto nasceu com `meta/HISTORICO.md`; o kit v1.73.0 padronizou o nome em inglês (`HISTORY.md`), gerando divergência com o CEREBRO e as Instruções.
+
+### Decisão
+Renomear o arquivo para `HISTORY.md`, preservando 100% do conteúdo, e atualizar as referências em CEREBRO, Instruções e CONTEXT.
+
+### Alternativas consideradas
+- **Manter `HISTORICO.md`** — evitaria o rename agora, mas deixaria o projeto divergindo do kit em todo update futuro, e contra a convenção do próprio projeto (nomes de arquivo em inglês, CONTEXT §Convenções).
+
+### Consequências
+- Alinhamento com o kit e com a convenção de idioma do projeto.
+- `git mv` preserva o histórico; nenhuma perda de conteúdo.
+
+---
+
+## DEC-009 — Grade livre (cols × rows) em vez de lista de layouts cadastrados
+**Data:** 2026-07-18 · **Status:** aceita *(a implementar em F2)*
+
+### Contexto
+`NUP_LAYOUTS` é um dict fixo no código; toda combinação faltante (ex.: 2×6) exige editar o `.py`. A proposta inicial era mover a lista para um JSON editável pela interface.
+
+### Decisão
+Expor **dois spinners `colunas × linhas`** na UI, permitindo qualquer grade sem cadastro. A lista fixa vira apenas **atalhos** para as combinações mais usadas, e os **presets nomeados** (.json) passam a guardar a configuração inteira — grade + papel + margens + corte + formato — não só a grade.
+
+### Alternativas consideradas
+- **Lista de layouts em JSON com editor na UI** — resolve o sintoma (falta o 2×6) mas mantém a causa (só existe o que foi cadastrado) e exige construir um CRUD de lista na interface. Mais trabalho, menos liberdade.
+- **Continuar editando o código** — inviável como produto.
+
+### Consequências
+- Qualquer grade passa a existir sem cadastro; a causa-raiz morre.
+- Menos UI para construir do que um editor de lista.
+- A persistência em JSON continua — o que foi descartado é a lista de layouts como estrutura de dados, não o JSON.
+- Grades muito grandes ficam possíveis (ex.: 12×12): precisa de um teto sensato e do aviso de qualidade para não gerar folha inútil.
+
+---
+
+## DEC-010 — Claude Code como raia de validação, não de desenvolvimento
+**Data:** 2026-07-19 · **Status:** aceita · *(refina a DEC-007, não a revoga)*
+
+### Contexto
+A DEC-007 dispensou o Claude Code como modo de desenvolvimento e registrou um gatilho de reabertura: "se aparecerem 2+ bugs de runtime de GUI que o chat não pegou". A F2 mudou justamente a geometria da janela, o DPI awareness e as divisórias — três coisas que **só se validam com a janela aberta** e que o chat estruturalmente não executa.
+
+### Decisão
+Montar `CLAUDE.md` e `.claude/` para o Claude Code atuar como **raia de execução e validação** (rodar, ver traceback, smoke test, corrigir o que só aparece rodando), mantendo **o chat como raia de autoria e curadoria** (arquitetura, escrita do código, curadoria dos `meta/`).
+
+### Alternativas consideradas
+- **Seguir só no chat** — aceitável enquanto a mudança era de engine (testável headless). Deixou de ser: a F2 é majoritariamente de interface.
+- **Migrar o desenvolvimento para o Code** — reabriria o custo que a DEC-007 recusou, e sem necessidade: a autoria no chat vem funcionando.
+
+### Consequências
+- O ponto cego assumido na DEC-007 ganha uma cobertura real, sem trazer de volta a cerimônia recusada.
+- O `CLAUDE.md` precisa de disciplina: instrui o Code a **preferir o menor diff** e a **relatar em vez de decidir** quando o problema for de arquitetura — senão surgem duas fontes de verdade.
+- `.claude/settings.json` proíbe editar `CEREBRO.md`, as Instruções e o `LOG-TEMPLATE.md`, e proíbe `git push`: curadoria de comportamento continua sendo do chat.
+- Edições do Code nos `meta/` são **append-only** (STATUS e DECISIONS), como o `/wrap` reforça.
 
 ---
 
 ## FIX-001 — `tk.PanedWindow` não adota `CTkScrollableFrame` como filho
-**Data:** 2026-06-15 *(diagnóstico/correção)* · *(bug presente desde o v1.0.0)*
+**Data:** 2026-07-18 *(diagnóstico/correção)* · *(bug presente desde o v1.0.0)*
 
 - **Sintoma:** ao abrir o app no Windows (Python 3.14), crash imediato:
   `_tkinter.TclError: can't add .!panedwindow.!panedwindow.!ctkframe.!canvas.!ctkscrollableframe to .!panedwindow.!panedwindow`.
-- **Causa raiz:** `CTkScrollableFrame` cria internamente um canvas aninhado. Ao passá-lo diretamente para `tk.PanedWindow.add()`, o PanedWindow tenta adotar como filho um widget que não é descendente direto dele na hierarquia esperada → o Tk recusa. O mesmo vale para qualquer painel CTk com canvas interno colocado direto no PanedWindow.
-- **Solução:** envolver cada painel em um `tk.Frame` simples (com `rowconfigure/columnconfigure` peso 1) e adicionar ESSE frame ao PanedWindow; o conteúdo CTk vai dentro do wrapper via `grid(sticky="nsew")`. Aplicado aos três painéis (lista, configurações, preview).
-- **Lição:** ao misturar widgets CustomTkinter com geometria nativa do Tkinter (PanedWindow, e por tabela outros gerenciadores que assumem filiação direta), **sempre interponha um `tk.Frame` neutro**. Virou armadilha nº1 em CONTEXT.
+- **Causa raiz:** `CTkScrollableFrame` cria internamente um canvas aninhado. Ao passá-lo diretamente para `tk.PanedWindow.add()`, o PanedWindow tenta adotar como filho um widget que não é descendente direto dele na hierarquia esperada → o Tk recusa.
+- **Solução:** envolver cada painel em um `tk.Frame` simples (com `rowconfigure/columnconfigure` peso 1) e adicionar ESSE frame ao PanedWindow; o conteúdo CTk vai dentro do wrapper via `grid(sticky="nsew")`. Aplicado aos três painéis.
+- **Lição:** ao misturar widgets CustomTkinter com geometria nativa do Tkinter, **sempre interponha um `tk.Frame` neutro**. Virou armadilha nº1 em CONTEXT.
+- **Lição de processo:** o bug passou porque o chat **não executa a GUI** — o engine foi testado headless e aprovado, a janela nunca abriu. Registrado como consequência assumida em DEC-004 e DEC-007.
+
+
+---
+
+## FIX-002 — Detecção de dependência opcional por `import` não prova capacidade
+**Data:** 2026-07-19 *(capturado em desenvolvimento, nunca chegou a ser publicado)*
+
+- **Sintoma:** com `svglib` instalado, `SVG_BACKEND` era definido e `.svg` entrava na lista de formatos aceitos — mas gerar a folha estourava `RenderPMError: cannot import desired renderPM backend rlPyCairo`. O usuário só descobriria na hora de imprimir.
+- **Causa raiz:** a sondagem testava só `import svglib`. Acontece que `svglib` **analisa** SVG em Python puro, mas **desenhar** depende do `renderPM` do reportlab, que por sua vez exige `rlPyCairo` ou a extensão C `_rl_renderPM`. Importar a biblioteca não prova que ela consegue produzir um pixel.
+- **Solução:** `_probe_svg_backend()` passou a fazer um **render real** de um SVG mínimo em memória. Só um back-end que efetivamente desenha é aceito; do contrário `.svg` some da lista de formatos e o app segue normalmente.
+- **Segundo bug, mesma investigação:** o probe importava os módulos em escopo local, então `rasterize_svg` levantava `NameError: name 'cairosvg' is not defined` ao rodar. Corrigido guardando as referências em `_SVG_MODS`.
+- **Lição:** para dependência opcional, **sonde a capacidade, não a presença** — e guarde a referência do módulo obtido, não só o nome do back-end. Ambos os bugs foram pegos pela suíte headless; nenhum apareceria em revisão de código.

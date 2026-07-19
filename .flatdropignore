@@ -1,0 +1,8 @@
+# .flatdropignore — enxuga o que sobe ao Projeto do Claude (tudo segue versionado no git).
+# Sintaxe .gitignore; salvo na raiz; tem a palavra final sobre o .gitignore.
+
+# Logs de sessao: o "agora" fica no meta/STATUS.md; o diario nao precisa ir ao mount.
+logs/
+
+# Saidas geradas pela ferramenta: nao sao contexto.
+outputs/

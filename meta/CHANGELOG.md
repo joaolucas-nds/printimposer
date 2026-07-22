@@ -9,6 +9,20 @@
 
 ---
 
+## [1.1.1] — 2026-07-19
+Correções apontadas pelo primeiro smoke test da GUI (raia de validação, DEC-010).
+
+### Corrigido
+- **A 1.1.0 não abria.** `GridPreview` sobrescrevia `self._w`, que no Tkinter guarda o pathname Tcl do widget — toda chamada ao Tk virava `invalid command name "70"`. Renomeado para `_box_w`/`_box_h`. Ver FIX-003.
+- **Folha gerada saía em 72 DPI sem aviso** quando o preview ainda estava compondo: `compose_page` mutava `cfg.dpi` num `LayoutConfig` compartilhado entre threads. O DPI virou parâmetro; não há mais mutação de estado compartilhado. Ver FIX-004.
+- **Janela invadia a barra de tarefas**, escondendo o botão "Gerar Arquivos": a geometria usava a tela física em vez da área útil. Novo helper `_work_area()` com `SPI_GETWORKAREA` no Windows. Ver FIX-005.
+- Miniaturas da lista passaram a usar `CTkImage` em vez de `ImageTk.PhotoImage`, eliminando o aviso do CustomTkinter e o borrão em telas com zoom 125%/150%.
+
+### Adicionado
+- 8 testes de regressão (40 → 48): varredura AST contra colisão com nomes reservados do Tkinter, teste de corrida de DPI com thread concorrente, e verificação do contrato da área útil.
+
+---
+
 ## [1.1.0] — 2026-07-19
 Fase **F2 — Controle, persistência e janela** do ROADMAP, completa.
 

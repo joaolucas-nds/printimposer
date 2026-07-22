@@ -15,14 +15,14 @@ PrintImposer é uma ferramenta desktop de **imposição de páginas** para impre
 - **Imagem/composição:** Pillow (PIL) — resize LANCZOS, composição RGBA, export PDF/PNG/JPEG/TIFF
 - **Concorrência:** `threading` (geração e preview fora da UI thread)
 - **Distribuição:** script único, rodado com `python print_imposer.py`
-- **Testes:** `tests/test_engine.py` — 40 testes headless via stub de tkinter. **Não cobrem a GUI**: janela, divisórias e DPI só se validam abrindo o app (ver CLAUDE.md §Smoke test).
+- **Testes:** `tests/test_engine.py` — 48 testes headless via stub de tkinter. **Não cobrem a GUI**: janela, divisórias e DPI só se validam abrindo o app (ver CLAUDE.md §Smoke test).
 - **SVG (opcional):** `cairosvg` ou `svglib`; ausente, o `.svg` some da lista de formatos.
 
 ## Estrutura do Projeto
 ```
 printimposer/
-├── print_imposer.py       # TODO o app em um arquivo (~1930 linhas)
-├── tests/test_engine.py   # 40 testes headless do engine (sem abrir janela)
+├── print_imposer.py       # TODO o app em um arquivo (~1960 linhas)
+├── tests/test_engine.py   # 48 testes headless (engine + checagens AST do fonte)
 ├── CLAUDE.md              # contrato da raia de validação (Claude Code)
 ├── .claude/               # settings.json + comandos /smoke e /wrap
 ├── meta/                  # documentação viva (KCM)
@@ -72,10 +72,14 @@ A relação **qualidade × DPI**: a folha é rasterizada no DPI escolhido. Se a 
 
 1. **Passar um `CTkScrollableFrame` direto para um `tk.PanedWindow`** — parece natural, mas o CTk cria um canvas aninhado que o PanedWindow não adota como filho → `TclError: can't add ...`. → **Envolva em um `tk.Frame` simples** antes do `.add()`. Ver FIX-001.
 2. **Confiar que "exportar 4× no Figma" = 300 DPI** — só vale se o frame-base tiver os pixels certos. → Mire o **alvo em pixels** (≥1240×1748 para A6), não a escala. Ver HISTORY §1.
-3. **Mexer no DPI dentro de `compose_page` sem restaurar** — o método troca `cfg.dpi` temporariamente para preview; sempre restaure no `finally`/fim. Já está tratado; não remova a restauração.
-4. **Assumir que dependência opcional importada = dependência funcional** — `svglib` importa sem erro mas só desenha com `rlPyCairo`/`_rl_renderPM`. → **Sonde a capacidade com um render real**, não o import, e guarde a referência do módulo. Ver FIX-002.
-5. **Geometria de janela fixa sem clamp e sem DPI awareness** — `geometry("1100x780")` parece inofensivo, mas ignora o tamanho real do monitor e, sem `SetProcessDpiAwareness`, o Windows escala por bitmap em telas com zoom → janela cortada e texto borrado. → Centralize com clamp e declare DPI awareness antes de criar a janela. Ver HISTORY §6.
-6. **Linhas de corte finas em saída lossless** — inflam o arquivo (detalhe de alta frequência). → Para arquivos enxutos, prefira marcas de canto (futuro) ou borda feita no Figma. Ver DEC-005 e ROADMAP F3.
+3. **Escrever em `self._w` (ou outro nome do Tkinter) numa classe que herda de widget** — parece um atributo livre, mas `_w` é o **pathname Tcl** do widget: sobrescrever quebra toda chamada ao Tk com «invalid command name» e o app não abre. → **Prefixe os seus** (`_box_w`). Ver FIX-003.
+4. **Mutar `cfg` dentro do engine, mesmo restaurando depois** — preview e geração rodam em **threads distintas sobre o mesmo `LayoutConfig`**; restaurar num `finally` conserta o caso sequencial e esconde o concorrente (a folha saía em 72 DPI sem aviso). → **Passe o valor por parâmetro**, não mute estado compartilhado. Ver FIX-004.
+5. **Usar `winfo_screenheight()` para dimensionar a janela** — devolve a tela **física**; a barra de tarefas come o rodapé e o botão de ação some. → Use a **área útil** (`SPI_GETWORKAREA` no Windows). Ver FIX-005.
+6. **Confiar que suíte verde = app funcional** — os 40 testes da 1.1.0 passavam com o app sem abrir, porque o stub de `tkinter` não reproduz o ambiente real. → Mudança de GUI **exige smoke test** (CLAUDE.md); e, quando dá, guarde a lição com uma checagem AST do código-fonte.
+7. **Mexer no DPI dentro de `compose_page` sem restaurar** — o método troca `cfg.dpi` temporariamente para preview; sempre restaure no `finally`/fim. Já está tratado; não remova a restauração.
+8. **Assumir que dependência opcional importada = dependência funcional** — `svglib` importa sem erro mas só desenha com `rlPyCairo`/`_rl_renderPM`. → **Sonde a capacidade com um render real**, não o import, e guarde a referência do módulo. Ver FIX-002.
+9. **Geometria de janela fixa sem clamp e sem DPI awareness** — `geometry("1100x780")` parece inofensivo, mas ignora o tamanho real do monitor e, sem `SetProcessDpiAwareness`, o Windows escala por bitmap em telas com zoom → janela cortada e texto borrado. → Centralize com clamp e declare DPI awareness antes de criar a janela. Ver HISTORY §6.
+10. **Linhas de corte finas em saída lossless** — inflam o arquivo (detalhe de alta frequência). → Para arquivos enxutos, prefira marcas de canto (futuro) ou borda feita no Figma. Ver DEC-005 e ROADMAP F3.
 
 ## Contexto de Produto
 - **Usuário-alvo:** quem produz cards/artes em lote no Figma e imprime em casa ou manda para gráfica.

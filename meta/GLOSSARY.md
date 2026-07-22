@@ -34,6 +34,8 @@
 - **`compose_page(page_idx, paths, override_dpi=None)`** — monta uma folha; com `override_dpi=72` é o caminho do preview.
 
 ## Termos da 1.1
+- **Área útil (work area)** — retângulo da tela sem a barra de tarefas. No Windows vem de `SPI_GETWORKAREA`. Diferente de `winfo_screenheight()`, que é a tela física (FIX-005).
+- **Nome reservado do Tkinter** — atributo que `tkinter.Misc` usa internamente (`_w`, `_name`, `_tclCommands`, `master`, `tk`, `children`). Escrever neles a partir de uma subclasse quebra o widget (FIX-003).
 - **Grade livre** — `cfg.cols × cfg.rows` arbitrários (até 12×12), sem lista cadastrada. Substituiu o dict `NUP_LAYOUTS` (DEC-009).
 - **Atalho de grade** (`NUP_SHORTCUTS`) — menu de combinações comuns que apenas *preenche* colunas/linhas. Conveniência, não a fonte de verdade.
 - **Preset** — configuração de layout salva com nome em `~/.printimposer/presets.json`. Guarda grade, papel, DPI, margens, corte e formato; **não** guarda caminhos de pasta.

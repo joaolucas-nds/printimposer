@@ -234,3 +234,38 @@ Montar `CLAUDE.md` e `.claude/` para o Claude Code atuar como **raia de execuç�
 - **Solução:** `_probe_svg_backend()` passou a fazer um **render real** de um SVG mínimo em memória. Só um back-end que efetivamente desenha é aceito; do contrário `.svg` some da lista de formatos e o app segue normalmente.
 - **Segundo bug, mesma investigação:** o probe importava os módulos em escopo local, então `rasterize_svg` levantava `NameError: name 'cairosvg' is not defined` ao rodar. Corrigido guardando as referências em `_SVG_MODS`.
 - **Lição:** para dependência opcional, **sonde a capacidade, não a presença** — e guarde a referência do módulo obtido, não só o nome do back-end. Ambos os bugs foram pegos pela suíte headless; nenhum apareceria em revisão de código.
+
+
+---
+
+## FIX-003 — Sobrescrever `_w` colide com o Tkinter e impede o app de abrir
+**Data:** 2026-07-19 · **Gravidade: bloqueador** — a 1.1.0 não abria.
+
+- **Sintoma:** `python print_imposer.py` morria na construção da UI com `_tkinter.TclError: invalid command name "70"`, no `GridPreview.draw` → `self.delete("all")`.
+- **Causa raiz:** `GridPreview.__init__` fazia `self._w, self._h = w, h` para guardar as dimensões da caixa. Só que em `tkinter.Misc`, **`_w` é o pathname Tcl do widget** (`'.!canvas'`) — é o nome pelo qual o Tk conhece o objeto. Sobrescrevendo com `70`, toda chamada passou a montar o comando `70 delete`, e o Tcl respondeu que não existe comando chamado "70". Atingia 3 linhas.
+- **Solução:** renomear para `self._box_w` / `self._box_h`.
+- **Por que a suíte não pegou:** o stub de `tkinter` da suíte headless é uma classe vazia — não define `_w`, então a colisão simplesmente não existe lá. **Os 40 testes passavam com o app quebrado.** Só o smoke test com janela real revelou.
+- **Guarda de regressão:** `TkAttributeCollisionTests` faz uma varredura **AST do código-fonte** procurando escrita em nome reservado do Tkinter (`_w`, `_name`, `_tclCommands`, `master`, `tk`, `children`) em qualquer classe que herde de `tk.*`/`ctk.*`. É a única forma headless de guardar esta lição — e vale para qualquer widget futuro, não só o `GridPreview`.
+- **Lição:** ao herdar de widget Tk, **prefixe atributos próprios** (`_box_w`, não `_w`). O namespace do `self` é compartilhado com a implementação do Tkinter. E, mais importante: *suíte verde não é o mesmo que app que abre* — foi exatamente o buraco que a DEC-010 previu.
+
+---
+
+## FIX-004 — Corrida de DPI entre a thread de preview e a de geração
+**Data:** 2026-07-19 · **Gravidade: alta** — saída silenciosamente errada.
+
+- **Sintoma:** gerar logo depois de mexer numa opção produzia a folha em **72 DPI** em vez do DPI configurado, sem aviso nenhum. Reproduzido: preview em voo → 595×842 px; preview assentado → 1240×1754 px, para o mesmo A4 a 150 DPI.
+- **Causa raiz:** `compose_page` mutava `cfg.dpi`, compunha, e restaurava num `finally`. Correto para uso **sequencial** — mas preview e geração rodam em **threads distintas sobre o mesmo `LayoutConfig`**. Enquanto a thread do preview segurava `cfg.dpi = 72`, a thread de geração lia esse valor e compunha a folha inteira em 72 DPI. O `finally` restaurava depois, tarde demais.
+- **Solução:** **parar de mutar estado compartilhado.** O DPI virou parâmetro que desce por `_mm_px`, `_page_px` e `cell_px`; `compose_page` não escreve mais em `cfg`, e o `finally` deixou de ser necessário porque não há nada a restaurar.
+- **Guarda de regressão:** `DpiRaceTests` roda uma thread martelando `preview_page()` enquanto a principal compõe folhas, e exige que todas saiam no tamanho do DPI configurado.
+- **Lição:** a armadilha nº3 do CONTEXT ("restaure sempre o DPI") estava **certa e insuficiente**: restaurar resolve o caso sequencial e mascara o concorrente. Quando há threads, a pergunta não é "eu restaurei?", é **"por que estou mutando estado compartilhado?"**. Parâmetro > mutação com restauração.
+
+---
+
+## FIX-005 — Geometria usava a tela física, não a área útil
+**Data:** 2026-07-19 · **Gravidade: média** — parte da UI inacessível.
+
+- **Sintoma:** em tela de 1366×768, a janela abria com base em y=737 contra uma área útil de 720 px: a barra de ação inferior — inclusive o botão **"Gerar Arquivos"** — ficava sob a barra de tarefas.
+- **Causa raiz:** `_setup_geometry` calculava o clamp com `winfo_screenheight()`, que devolve a **tela física**, ignorando a barra de tarefas e qualquer outra barra acoplada.
+- **Solução:** novo helper `_work_area()`, que no Windows consulta `SystemParametersInfoW(SPI_GETWORKAREA)` e devolve `(x, y, w, h)` da área realmente utilizável; fora do Windows (ou se a API falhar) desconta uma faixa de cortesia de 60 px. O posicionamento passou a ser relativo à origem da área útil, não a (0,0).
+- **Guarda de regressão:** `WorkAreaTests` verifica que `_setup_geometry` chama `_work_area()` e **não** usa `winfo_screenheight()` diretamente.
+- **Lição:** "caber na tela" e "caber na área utilizável" são coisas diferentes. Tela cheia de barras é o caso comum, não a exceção.

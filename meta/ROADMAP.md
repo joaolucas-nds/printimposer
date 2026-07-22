@@ -14,9 +14,9 @@
 - Saída PDF/PNG/JPEG/TIFF (DEC-006); linhas de corte atravessando a folha (DEC-005).
 - Correção do crash PanedWindow×CTkScrollableFrame (FIX-001).
 
-## 🟢 F2 — Controle, persistência e janela *(concluída na 1.1.0)*
+## 🟡 F2 — Controle, persistência e janela *(entregue na 1.1.1; fecha no 2º smoke)*
 **Objetivo:** acabar com a reconfiguração repetida e com a necessidade de editar o código para mudar layout.
-**Critério de conclusão:** ✅ atingido no código, ⏳ **pendente de smoke test da GUI** (ver STATUS).
+**Critério de conclusão:** ✅ atingido no código; ⏳ **pendente do 2º smoke test** — o 1º achou três bugs (FIX-003/004/005), já corrigidos.
 - ✅ Grade livre `cols × rows` até 12×12 (DEC-009) — resolve o 2×6 e qualquer outro.
 - ✅ Presets nomeados (.json) com a configuração inteira; miniatura do grid.
 - ✅ Persistência de config e geometria em `~/.printimposer/settings.json`.
@@ -26,9 +26,11 @@
 - ✅ Gerador de `.bat`; botão "+ Pasta"; guarda de qualidade.
 - ✅ Carregamento: `Image.draft()` em JPEG + cache de miniatura (só a parte segura).
 - ✅ Suíte headless com 40 testes.
-- ⏳ Smoke test da GUI — único item aberto da fase.
+- ✅ 1º smoke test executado: itens 2–7 e 9 passaram; 1 e 8 falharam pelo bloqueador, corrigido.
+- ⏳ 2º smoke test após aplicar `260719-asu0001.yaml` — único item aberto da fase.
+- ⏳ Nitidez em zoom 125%/150% — nunca exercitada (monitor do teste a 100%).
 
-## 🟡 F3 — Qualidade profissional *(próxima)*
+## 🔵 F3 — Qualidade profissional *(próxima, após fechar a F2)*
 **Objetivo:** aproximar a saída do padrão de gráfica e acabar com a perda de qualidade na origem.
 **Critério de conclusão:** PDF entra como fonte vetorial; marcas de canto e sangria disponíveis; compressão escolhível.
 - ✅ ~~Entrada SVG~~ — antecipada e entregue na 1.1.0.

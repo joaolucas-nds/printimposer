@@ -39,6 +39,15 @@ Mandar para a impressora sem arquivo intermediário. No Windows passa por API de
 ### 2026-07-19 — Empacotar o SVG junto (resolver a dependência no Windows)
 Descoberto na implementação: **nenhum dos dois back-ends é Python puro na hora de desenhar** — `cairosvg` quer libcairo, `svglib` quer `rlPyCairo`/`_rl_renderPM` (ver FIX-002). Para o SVG funcionar na máquina do usuário sem dor, avaliar: (a) documentar o `pip install` certo para Windows, (b) embutir as DLLs no .exe da F4, ou (c) um terceiro caminho (`resvg` via binário, Inkscape CLI). Sem isso, o recurso existe mas pode nunca ligar.
 
+### 2026-07-19 — Detector de colisão com nomes do Tkinter como lint permanente
+O `TkAttributeCollisionTests` varre o AST atrás de escrita em nome reservado do Tkinter. Hoje cobre `GridPreview` e qualquer classe que herde de `tk.*`/`ctk.*`. Valeria virar um lint rodado no `/wrap`, e não só um teste — o custo é o mesmo e a lição vale para todo widget futuro.
+
+### 2026-07-19 — Congelar o `LayoutConfig` durante a geração
+FIX-004 tirou a mutação, mas o engine ainda **lê** o `cfg` vivo enquanto compõe: mudar o papel no meio de uma geração longa ainda produziria folhas com geometrias diferentes na mesma leva. Uma cópia (`dataclasses.replace` / `copy`) no início de `generate_all` fecharia isso de vez. Não é urgente — exige mexer nas opções durante a geração —, mas é a mesma classe de problema.
+
+### 2026-07-19 — Aviso quando `pythonw` engole o traceback
+O smoke mostrou que, via `.bat` com `pythonw`, uma falha na abertura é **100% silenciosa**: duplo clique e nada acontece. Vale um `try/except` no `main()` que grave o traceback em `~/.printimposer/last_error.log` e mostre um `messagebox` — assim o usuário vê o erro mesmo sem console.
+
 ### 2026-07-19 — Refresh imediato do menu de presets
 O `CTkOptionMenu` de presets só reflete um preset recém-salvo depois de reabrir o app: o `configure(values=...)` está sendo feito por varredura frágil da árvore de widgets. Guardar a referência do menu num atributo e atualizar direto. Pequeno, mas é atrito visível.
 
@@ -95,6 +104,7 @@ Executável Windows para quem não tem Python. **F4.**
 ## 🔩 Feedback para o ASU
 > Limitações e pedidos de melhoria da ferramenta, observados em uso.
 
+- **2026-07-19 — Primeira instrução ASU do projeto: `260719-asu0001.yaml`.** 12 modificações em 2 arquivos, todas `replace_method` / `insert_before_pattern` / `replace_line_pattern`. Observações de uso: (a) `replace_method` foi a estratégia mais confortável — dispensa âncora literal, então não há risco de errar indentação; (b) a única inserção precisou de `pattern` com regex escapado (`^    def _setup_geometry\(self\):`), e foi tranquilo; (c) **antes de emitir, simulei a aplicação** e comparei com o arquivo já testado — o resultado bateu byte a byte. Recomendo que isso vire hábito: instrução ASU gerada às cegas é aposta.
 - **2026-07-19 — A F2 não usou ASU, e o motivo vale registrar.** A entrega tocou constantes, `LayoutConfig`, o engine, três painéis e o `main()`. Um patch com 15+ âncoras num arquivo em reestruturação é frágil e não dá para verificar sem aplicar. Foi entregue arquivo inteiro, como a DEC-007 prevê para reescrita profunda. **O ASU passa a ser o caminho natural agora**: com a 1.1.0 estabilizada, os próximos ajustes são localizados (ex.: o refresh do menu de presets) — exatamente o caso dele.
 
 ---

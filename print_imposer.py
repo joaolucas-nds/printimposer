@@ -412,21 +412,24 @@ class ImpositionEngine:
 
     # ── Geometria ────────────────────────────────────────────────────────────
 
-    def _mm_px(self, mm: float) -> int:
-        return max(0, int(round(mm * self.cfg.dpi * MM_TO_INCH)))
+    def _mm_px(self, mm: float, dpi: Optional[int] = None) -> int:
+        """Converte mm para px. O `dpi` explícito existe para NÃO mutar cfg.dpi:
+    preview e geração rodam em threads distintas sobre o mesmo LayoutConfig."""
+        return max(0, int(round(mm * (dpi or self.cfg.dpi) * MM_TO_INCH)))
 
-    def _page_px(self) -> Tuple[int, int]:
-        return self._mm_px(self.cfg.paper_w_mm), self._mm_px(self.cfg.paper_h_mm)
+    def _page_px(self, dpi: Optional[int] = None) -> Tuple[int, int]:
+        return (self._mm_px(self.cfg.paper_w_mm, dpi),
+                self._mm_px(self.cfg.paper_h_mm, dpi))
 
     def _grid(self) -> Tuple[int, int]:
         return max(1, self.cfg.cols), max(1, self.cfg.rows)
 
-    def cell_px(self) -> Tuple[int, int]:
-        """Tamanho da célula em pixels no DPI atual. Base da guarda de qualidade."""
+    def cell_px(self, dpi: Optional[int] = None) -> Tuple[int, int]:
+        """Tamanho da célula em pixels. Base da guarda de qualidade e da composição."""
         cols, rows = self._grid()
-        pw, ph = self._page_px()
-        mo = self._mm_px(self.cfg.margin_outer_mm)
-        mb = self._mm_px(self.cfg.margin_between_mm)
+        pw, ph = self._page_px(dpi)
+        mo = self._mm_px(self.cfg.margin_outer_mm, dpi)
+        mb = self._mm_px(self.cfg.margin_between_mm, dpi)
         cw = max(1, (pw - 2*mo - (cols-1)*mb) // cols)
         ch = max(1, (ph - 2*mo - (rows-1)*mb) // rows)
         return cw, ch
@@ -587,53 +590,50 @@ class ImpositionEngine:
 
     def compose_page(self, page_idx: int, image_paths: List[str],
                      override_dpi: Optional[int] = None) -> Image.Image:
+        """Compõe uma folha no DPI pedido (ou no do config).
+
+    NÃO muta `cfg.dpi`. A versão anterior trocava o valor e restaurava num
+    `finally` — correto em uso sequencial, mas preview e geração rodam em
+    threads distintas sobre o MESMO LayoutConfig: gerar enquanto o preview
+    compunha produzia a folha em 72 DPI, silenciosamente. Ver FIX-004.
+    """
         cfg = self.cfg
-        orig_dpi = cfg.dpi
-        if override_dpi:
-            cfg.dpi = override_dpi
-        try:
-            cols, rows = self._grid()
-            nup    = cols * rows
-            pw, ph = self._page_px()
-            mo     = self._mm_px(cfg.margin_outer_mm)
-            mb     = self._mm_px(cfg.margin_between_mm)
+        cols, rows = self._grid()
+        nup    = cols * rows
+        pw, ph = self._page_px(override_dpi)
+        mo     = self._mm_px(cfg.margin_outer_mm, override_dpi)
+        mb     = self._mm_px(cfg.margin_between_mm, override_dpi)
+        cw, ch = self.cell_px(override_dpi)
 
-            cw = max(1, (pw - 2*mo - (cols-1)*mb) // cols)
-            ch = max(1, (ph - 2*mo - (rows-1)*mb) // rows)
+        bg   = self._hex_rgb(cfg.bg_color)
+        page = Image.new("RGB", (pw, ph), bg)
 
-            bg   = self._hex_rgb(cfg.bg_color)
-            page = Image.new("RGB", (pw, ph), bg)
+        start = page_idx * nup
+        for slot in range(nup):
+            idx = start + slot
+            if idx >= len(image_paths):
+                break
 
-            start = page_idx * nup
-            for slot in range(nup):
-                idx = start + slot
-                if idx >= len(image_paths):
-                    break
+            col = slot % cols
+            row = slot // cols
+            x   = mo + col * (cw + mb)
+            y   = mo + row * (ch + mb)
 
-                col = slot % cols
-                row = slot // cols
-                x   = mo + col * (cw + mb)
-                y   = mo + row * (ch + mb)
+            try:
+                # SVG rasteriza direto no tamanho da célula: zero upscale.
+                img  = open_source(image_paths[idx], cw, ch)
+                cell = self._place_image(img, cw, ch, bg)
+            except Exception:
+                cell = Image.new("RGB", (cw, ch), (200, 190, 190))
+                ImageDraw.Draw(cell).text(
+                    (4, max(0, ch // 2 - 8)), "Erro ao carregar", fill=(160, 30, 30))
 
-                try:
-                    # SVG rasteriza direto no tamanho da célula: zero upscale.
-                    img  = open_source(image_paths[idx], cw, ch)
-                    cell = self._place_image(img, cw, ch, bg)
-                except Exception:
-                    cell = Image.new("RGB", (cw, ch), (200, 190, 190))
-                    ImageDraw.Draw(cell).text(
-                        (4, max(0, ch // 2 - 8)), "Erro ao carregar", fill=(160, 30, 30))
+            page.paste(cell, (x, y))
 
-                page.paste(cell, (x, y))
+        if cfg.cut_lines:
+            self._draw_cuts(page, cols, rows, cw, ch, mo, mb)
 
-            if cfg.cut_lines:
-                self._draw_cuts(page, cols, rows, cw, ch, mo, mb)
-
-            return page
-        finally:
-            # Restaurar SEMPRE: o preview troca o DPI temporariamente (armadilha
-            # registrada no CONTEXT). O finally garante isso mesmo em exceção.
-            cfg.dpi = orig_dpi
+        return page
 
     def generate_all(self, progress_cb=None) -> List[Image.Image]:
         paths = self._expand()
@@ -758,15 +758,18 @@ class GridPreview(tk.Canvas):
     def __init__(self, master, w=70, h=92, **kw):
         super().__init__(master, width=w, height=h, highlightthickness=0,
                          bg="#1f1f2e", **kw)
-        self._w, self._h = w, h
+        # ATENÇÃO: nunca use self._w / self._h aqui. Em tkinter.Misc, `_w` guarda
+        # o pathname Tcl do widget ('.!canvas'); sobrescrever quebra TODA chamada
+        # ao Tk com «invalid command name». Prefixo `_box_` evita a colisão. Ver FIX-003.
+        self._box_w, self._box_h = w, h
         self.draw(2, 2)
 
     def draw(self, cols: int, rows: int):
         self.delete("all")
         cols = max(1, cols); rows = max(1, rows)
         pad = 5
-        iw = self._w - 2 * pad
-        ih = self._h - 2 * pad
+        iw = self._box_w - 2 * pad
+        ih = self._box_h - 2 * pad
 
         self.create_rectangle(pad, pad, pad + iw, pad + ih,
                               outline="#6b7ba8", fill="#2b2b3d")
@@ -812,7 +815,10 @@ class ImageRow(ctk.CTkFrame):
 
         self.tk_img = None
         if self.entry.pil_thumb:
-            self.tk_img = ImageTk.PhotoImage(self.entry.pil_thumb)
+            # CTkImage, não PhotoImage: só ele reescala em telas 125%/150%.
+            self.tk_img = ctk.CTkImage(light_image=self.entry.pil_thumb,
+                                       dark_image=self.entry.pil_thumb,
+                                       size=(THUMB_W, THUMB_H))
             lbl_img = ctk.CTkLabel(self, image=self.tk_img, text="")
         else:
             lbl_img = ctk.CTkLabel(self, text="?", font=ctk.CTkFont(size=22))
@@ -1607,36 +1613,60 @@ class PrintImposerApp(ctk.CTk):
 
     # ── Geometria da janela ──────────────────────────────────────────────────
 
-    def _setup_geometry(self):
-        """Centraliza a janela e limita ao tamanho do monitor.
+    def _work_area(self) -> Tuple[int, int, int, int]:
+        """Área ÚTIL da tela — sem a barra de tarefas. Retorna (x, y, w, h).
 
-        Sem o clamp, a geometria fixa estourava telas menores e parte da UI
-        ficava fora do visível. Ver HISTORY §6.
+        `winfo_screenheight()` devolve a tela física; usar isso deixava a barra
+        de ação ("Gerar Arquivos") escondida sob a barra de tarefas em telas
+        baixas. No Windows a área útil vem do SPI_GETWORKAREA. Ver FIX-005.
         """
-        self.update_idletasks()
         sw = self.winfo_screenwidth()
         sh = self.winfo_screenheight()
 
-        # Reaproveita a geometria salva, mas só se ainda couber neste monitor.
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                from ctypes import wintypes
+                rect = wintypes.RECT()
+                SPI_GETWORKAREA = 0x0030
+                if ctypes.windll.user32.SystemParametersInfoW(
+                        SPI_GETWORKAREA, 0, ctypes.byref(rect), 0):
+                    return (rect.left, rect.top,
+                            rect.right - rect.left, rect.bottom - rect.top)
+            except Exception:
+                pass
+
+        # Fora do Windows, ou se a API falhar: desconta uma faixa de cortesia.
+        return 0, 0, sw, max(400, sh - 60)
+
+    def _setup_geometry(self):
+        """Centraliza a janela dentro da ÁREA ÚTIL da tela.
+
+    Dois cuidados: o clamp usa a área útil (não a tela física), para a barra
+    de ação não ficar sob a barra de tarefas; e a posição salva só é
+    reaproveitada se ainda couber no monitor atual. Ver HISTORY §6 e FIX-005.
+    """
+        self.update_idletasks()
+        ax, ay, aw, ah = self._work_area()
+
+        def place(w: int, h: int):
+            w = max(880, min(w, aw))
+            h = max(600, min(h, ah))
+            x = ax + max(0, (aw - w) // 2)
+            y = ay + max(0, (ah - h) // 3)   # levemente acima do centro
+            self.geometry(f"{w}x{h}+{x}+{y}")
+            self.minsize(880, 600)
+
         if self._saved_geometry:
             try:
-                size = self._saved_geometry.split("+")[0]
-                w, h = (int(v) for v in size.split("x"))
-                if w <= sw and h <= sh:
-                    x = max(0, (sw - w) // 2)
-                    y = max(0, (sh - h) // 3)
-                    self.geometry(f"{w}x{h}+{x}+{y}")
-                    self.minsize(880, 600)
+                w, h = (int(v) for v in self._saved_geometry.split("+")[0].split("x"))
+                if w <= aw and h <= ah:
+                    place(w, h)
                     return
             except Exception:
                 pass
 
-        w = min(1180, int(sw * 0.90))
-        h = min(820,  int(sh * 0.88))
-        x = max(0, (sw - w) // 2)
-        y = max(0, (sh - h) // 3)   # um pouco acima do centro: agrada mais que o centro exato
-        self.geometry(f"{w}x{h}+{x}+{y}")
-        self.minsize(880, 600)
+        place(min(1180, int(aw * 0.92)), min(820, int(ah * 0.92)))
 
     def _place_sashes(self):
         """Define a posição inicial dos divisores.

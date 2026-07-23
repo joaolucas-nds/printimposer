@@ -16,8 +16,10 @@ O que estes testes NÃO cobrem: qualquer coisa de interface. Janela, sashes e
 DPI awareness só se validam abrindo o app (ver CLAUDE.md, seção Smoke test).
 """
 
+import ast
 import os
 import sys
+import threading
 import types
 import tempfile
 import unittest
@@ -379,6 +381,146 @@ class SvgTests(unittest.TestCase):
         cfg = pi.LayoutConfig(); cfg.dpi = 300
         eng = pi.ImpositionEngine([pi.ImageEntry(str(self.svg))], cfg)
         self.assertEqual(eng.quality_report()["level"], "none")
+
+
+class TkAttributeCollisionTests(unittest.TestCase):
+    """REGRESSÃO do bloqueador da 1.1.0 (FIX-003).
+
+    `GridPreview.__init__` fazia `self._w, self._h = w, h`. Em `tkinter.Misc`,
+    `_w` guarda o pathname Tcl do widget ('.!canvas'); sobrescrever com um int
+    faz TODA chamada ao Tk virar `70 delete` → «invalid command name "70"», e o
+    app não abre.
+
+    O stub de tkinter da suíte não define `_w`, então nenhum teste de
+    comportamento pegaria isso. A checagem aqui é sobre o CÓDIGO-FONTE: nenhuma
+    classe que herda de widget Tk pode escrever em nome reservado do Tkinter.
+    É a única forma headless de guardar esta lição.
+    """
+
+    # Nomes que tkinter.Misc usa internamente e que não podem ser sobrescritos.
+    RESERVADOS = {"_w", "_name", "_tclCommands", "master", "tk", "children"}
+
+    def setUp(self):
+        self.src = (Path(__file__).resolve().parent.parent / "print_imposer.py"
+                    ).read_text(encoding="utf-8")
+        self.tree = ast.parse(self.src)
+
+    def _classes_de_widget(self):
+        """Classes que herdam de algo do tkinter/customtkinter."""
+        for node in ast.walk(self.tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            for base in node.bases:
+                nome = ast.unparse(base)
+                if nome.startswith(("tk.", "ctk.")):
+                    yield node
+                    break
+
+    def test_nenhuma_classe_de_widget_sobrescreve_nome_reservado(self):
+        infracoes = []
+        for cls in self._classes_de_widget():
+            for node in ast.walk(cls):
+                alvos = []
+                if isinstance(node, ast.Assign):
+                    alvos = node.targets
+                elif isinstance(node, ast.AnnAssign):
+                    alvos = [node.target]
+                for alvo in alvos:
+                    for elt in (alvo.elts if isinstance(alvo, ast.Tuple) else [alvo]):
+                        if (isinstance(elt, ast.Attribute)
+                                and isinstance(elt.value, ast.Name)
+                                and elt.value.id == "self"
+                                and elt.attr in self.RESERVADOS):
+                            infracoes.append(f"{cls.name}: self.{elt.attr}")
+        self.assertEqual(infracoes, [],
+                         f"nome reservado do Tkinter sobrescrito: {infracoes}")
+
+    def test_gridpreview_usa_prefixo_proprio(self):
+        self.assertIn("self._box_w", self.src)
+        self.assertNotIn("self._w, self._h", self.src)
+
+
+class DpiRaceTests(unittest.TestCase):
+    """REGRESSÃO da corrida de DPI entre preview e geração (FIX-004).
+
+    `compose_page` mutava `cfg.dpi` e restaurava num `finally`. Correto em uso
+    sequencial — mas preview e geração rodam em THREADS distintas sobre o mesmo
+    `LayoutConfig`. Gerar com o preview em voo produzia a folha em 72 DPI, sem
+    aviso nenhum. Agora o DPI é parâmetro, e nada é mutado.
+    """
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.img = make_image(self.tmp / "src.png", 600, 840)
+        self.cfg = pi.LayoutConfig()
+        self.cfg.dpi = 150
+        self.cfg.cols = self.cfg.rows = 2
+        self.cfg.output_dir = str(self.tmp)
+        e = pi.ImageEntry(self.img); e.quantity = 4
+        self.eng = pi.ImpositionEngine([e], self.cfg)
+
+    def test_compose_nao_muta_o_dpi_do_config(self):
+        self.eng.compose_page(0, self.eng._expand(), override_dpi=72)
+        self.assertEqual(self.cfg.dpi, 150)
+
+    def test_preview_nao_muta_o_dpi_do_config(self):
+        self.eng.preview_page(0)
+        self.assertEqual(self.cfg.dpi, 150)
+
+    def test_geracao_mantem_o_dpi_com_preview_concorrente(self):
+        """O cenário real: mexo numa opção (dispara preview) e clico em Gerar."""
+        parar = threading.Event()
+        erros = []
+
+        def martelar_preview():
+            while not parar.is_set():
+                try:
+                    self.eng.preview_page(0)
+                except Exception as exc:      # pragma: no cover
+                    erros.append(exc)
+                    return
+
+        t = threading.Thread(target=martelar_preview, daemon=True)
+        t.start()
+        try:
+            esperado = self.eng._page_px()          # A4 @ 150 DPI
+            for _ in range(6):
+                pagina = self.eng.compose_page(0, self.eng._expand())
+                self.assertEqual(pagina.size, esperado,
+                                 "folha saiu no DPI do preview — corrida de volta")
+        finally:
+            parar.set(); t.join(timeout=5)
+        self.assertEqual(erros, [])
+        self.assertEqual(self.cfg.dpi, 150)
+
+    def test_dpi_explicito_muda_so_aquela_folha(self):
+        p72  = self.eng.compose_page(0, self.eng._expand(), override_dpi=72)
+        p150 = self.eng.compose_page(0, self.eng._expand())
+        self.assertLess(p72.size[0], p150.size[0])
+        self.assertEqual(self.cfg.dpi, 150)
+
+
+class WorkAreaTests(unittest.TestCase):
+    """A janela precisa caber na área ÚTIL, não na tela física (FIX-005).
+
+    Só dá para checar o contrato do código headless; o posicionamento real
+    exige abrir a janela (item 1 do smoke test).
+    """
+
+    def setUp(self):
+        self.src = (Path(__file__).resolve().parent.parent / "print_imposer.py"
+                    ).read_text(encoding="utf-8")
+
+    def test_existe_helper_de_area_util(self):
+        self.assertIn("def _work_area", self.src)
+        self.assertIn("SPI_GETWORKAREA", self.src)
+
+    def test_setup_geometry_usa_area_util_e_nao_a_tela_fisica(self):
+        i = self.src.index("def _setup_geometry")
+        j = self.src.index("def _place_sashes")
+        corpo = self.src[i:j]
+        self.assertIn("_work_area()", corpo)
+        self.assertNotIn("winfo_screenheight()", corpo)
 
 
 class LauncherTests(unittest.TestCase):

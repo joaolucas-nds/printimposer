@@ -7,6 +7,9 @@
 ### Corrigido
 - Rótulo do segundo destino de saída cortado a 1366×768 (agora «Salvar cópia em outro destino»).
 
+### Documentação
+- README reescrito para a 1.2: grade livre, painel em três zonas, menus e atalhos de teclado, guarda de qualidade, SVG opcional, atalho `.bat` na pasta-pai, local das configurações.
+
 ---
 
 ## [1.2.0] — 2026-11-03

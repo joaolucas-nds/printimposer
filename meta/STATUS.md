@@ -10,7 +10,7 @@
 **1.2.0** — 2026-11-03 — F3 **concluída**: implementada na wo0002, conferida na tela pelo dono em 03/11. Suíte verde (63 testes, 5 skips de SVG).
 
 ## 🎯 Foco atual
-**Produto:** F3 fechada. Próximo: atualizar o README (documenta a 1.0) e escolher a ordem interna da F4 — Qualidade profissional (ROADMAP).
+**Produto:** F3 fechada e README atualizado para a 1.2. Próximo: escolher a ordem interna da F4 — Qualidade profissional (ROADMAP).
 **Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013).
 
 ## ✅ Funcionando *(suíte headless verde; conferência visual do dono em 03/11)*
@@ -35,7 +35,7 @@
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
-- [ ] **Chat:** atualizar o README para a 1.2 (ainda documenta a 1.0: lista fixa de N-up, PDF padrão, saída na Área de Trabalho). Prints sugeridos: a janela inteira, o menu `Opções`, o diálogo «Criar atalho».
+- [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho». O README hoje não tem imagens; com os prints, o chat os encaixa.
 - [ ] **Chat + dono:** escolher a ordem interna da F4.
 - [ ] Instalar um back-end de SVG no Windows e confirmar que o cabeçalho mostra o nome certo. `cairosvg` precisa de libcairo; `svglib` precisa de `rlPyCairo` — nenhum é 100% Python puro na hora de desenhar (ver FIX-002).
 - [ ] Avaliar `Image.draft()` também no caminho de composição (hoje só na miniatura).
@@ -45,4 +45,4 @@
 
 ## 💬 Última conversa
 
-**2026-11-03** — Merge do KCM v1.133.0 fechado (DEC-012, DEC-013); F3 implementada pelo Code (wo0002, 1.2.0), conferida pelo dono e fechada pela wo0003 (rótulo cortado corrigido). Próximo: README e ordem da F4.
+**2026-11-03** — Merge do KCM v1.133.0 fechado (DEC-012, DEC-013); F3 implementada pelo Code (wo0002, 1.2.0), conferida pelo dono e fechada pela wo0003 (rótulo cortado corrigido); README reescrito para a 1.2 (wo0004). Achado: no Windows `Path.home()` ignora `HOME` — teste do app isola com `USERPROFILE` (CONTEXT, armadilha 11). Próximo: ordem da F4.

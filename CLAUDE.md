@@ -71,6 +71,8 @@ Depois de qualquer mudança de interface, abra o app e confira:
 9. **SVG** — se o cabeçalho disser `SVG: cairosvg` (ou `svglib`), adicione um `.svg` e gere.
    Se disser `indisponível`, `.svg` não deve nem aparecer no seletor de arquivos.
 
+**Abra o app de teste isolado:** defina `USERPROFILE` **e** `HOME` para uma pasta temporária — no Windows `Path.home()` ignora `HOME`, e só ele não protege o `~/.printimposer` real do dono (CONTEXT, armadilha 11). Confira em `Ajuda › Sobre` o caminho do `settings.json` antes de mexer em campos.
+
 Relate o que falhou com o traceback inteiro. Se tudo passar, diga isso explicitamente.
 
 ## Convenções

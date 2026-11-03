@@ -82,6 +82,7 @@ A relação **qualidade × DPI**: a folha é rasterizada no DPI escolhido. Se a 
 8. **Assumir que dependência opcional importada = dependência funcional** — `svglib` importa sem erro mas só desenha com `rlPyCairo`/`_rl_renderPM`. → **Sonde a capacidade com um render real**, não o import, e guarde a referência do módulo. Ver FIX-002.
 9. **Geometria de janela fixa sem clamp e sem DPI awareness** — `geometry("1100x780")` parece inofensivo, mas ignora o tamanho real do monitor e, sem `SetProcessDpiAwareness`, o Windows escala por bitmap em telas com zoom → janela cortada e texto borrado. → Centralize com clamp e declare DPI awareness antes de criar a janela. Ver HISTORY §6.
 10. **Linhas de corte finas em saída lossless** — inflam o arquivo (detalhe de alta frequência). → Para arquivos enxutos, prefira marcas de canto (futuro) ou borda feita no Figma. Ver DEC-005 e ROADMAP F3.
+11. **Isolar o app num teste definindo só `HOME`** — parece criar um usuário limpo, mas no Windows, desde o Python 3.8, `Path.home()` lê `USERPROFILE` e **ignora `HOME`**; o `SettingsStore` (`Path.home() / ".printimposer"`) grava então nas configurações reais do dono. Em 03/11 o dono achou o segundo destino ligado apontando para `AppData\Local\Temp\claude\…`, sobra de teste. → Para abrir o app em teste, defina `USERPROFILE` **e** `HOME` para a pasta temporária, e confira no Sobre qual `settings.json` está em uso antes de mexer em qualquer campo.
 
 ## 📁 Arquivos Críticos (não mexer sem contexto)
 > Conhecimento **estável**, não estado do agora — por isso vive aqui, e não no STATUS.

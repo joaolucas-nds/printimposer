@@ -30,21 +30,22 @@
 - ✅ 2º smoke (22/07): app abre, `.bat` funciona, interface aprovada pelo usuário.
 - ⏳ Nitidez em zoom 125%/150% — segue sem exercitar (monitor a 100%). Movida para a F3.
 
-## 🟡 F3 — Interface e descoberta *(próxima)*
+## 🟢 F3 — Interface e descoberta *(concluída na 1.2.0)*
 **Objetivo:** acabar com a rolagem para configurar, e tirar do painel o que é ação em vez de configuração.
 **Critério de conclusão:** em 1366×768, configurar um trabalho comum sem rolar; contador e guarda de qualidade sempre visíveis; `.bat`, presets, sobre e guia acessíveis por menubar.
 **Spec:** `meta/specs/SPEC-F3-UI.md` (aprovada em 22/07, revisada em 03/11). **Implementação:** Claude Code, `wo0002`. **Fundamento:** HISTORY §9.
-- [ ] `CollapsibleSection` — accordion multi-aberto, com `grid_remove()` e cabeçalho focável.
-- [ ] Zona fixa superior: Grade + mini-grid (fora do accordion).
-- [ ] Zona fixa inferior: contador de folhas, guarda de qualidade e tamanho da célula.
-- [ ] Menubar `Arquivo · Opções · Ajuda` na topbar, com atalhos de teclado.
-- [ ] Diálogo "Criar atalho" que explica antes de gerar (substitui a seção `.bat`).
-- [ ] Presets migram para `Opções › Presets ▸` — mata o bug do menu que não atualizava.
-- [ ] Guia rápido "Figma → impressão" em Ajuda.
-- [ ] `sections_open` no `settings.json`, com padrão para arquivo antigo.
-- [ ] Nitidez em zoom 125%/150% — verificar no smoke (herdada da F2).
+- ✅ `CollapsibleSection` — accordion multi-aberto, com `grid_remove()` e cabeçalho focável.
+- ✅ Zona fixa superior: Grade + mini-grid (fora do accordion).
+- ✅ Zona fixa inferior: contador de folhas, guarda de qualidade e tamanho da célula.
+- ✅ Menubar `Arquivo · Opções · Ajuda` na topbar, com atalhos de teclado.
+- ✅ Diálogo "Criar atalho" que explica antes de gerar (substitui a seção `.bat`).
+- ✅ Presets migram para `Opções › Presets ▸` — mata o bug do menu que não atualizava.
+- ✅ Guia rápido "Figma → impressão" em Ajuda.
+- ✅ `sections_open` no `settings.json`, com padrão para arquivo antigo.
+- ⏳ Nitidez em zoom 125%/150% — segue sem exercitar (monitor a 100%). Movida para a F4.
+- ✅ Conferência visual do dono (03/11): menus, accordion, atalhos de teclado, presets sem reiniciar, atalho na pasta-pai — tudo certo.
 
-## 🔵 F4 — Qualidade profissional *(futuro, sem data)*
+## 🟡 F4 — Qualidade profissional *(próxima — ordem interna não decidida)*
 **Objetivo:** aproximar a saída do padrão de gráfica e acabar com a perda de qualidade na origem.
 **Critério de conclusão:** PDF entra como fonte vetorial; marcas de canto e sangria disponíveis; compressão escolhível.
 - ✅ ~~Entrada SVG~~ — antecipada e entregue na 1.1.0.
@@ -56,6 +57,7 @@
 - Margem por eixo (X/Y independentes) e folga por encolhimento.
 - Barra de estado com px, MB estimados e selo de qualidade.
 - **Imposição vetorial de ponta a ponta** (pypdf/reportlab): qualidade perfeita e arquivos minúsculos; pode exigir modularizar (revisitar DEC-003).
+- Nitidez em zoom 125%/150% — conferir quando houver monitor ou escala para testar (herdada da F3).
 
 ## 🔵 F5 — Distribuição, fluidez e layouts livres *(futuro, sem data)*
 **Objetivo:** facilitar adoção por quem não tem Python e soltar as amarras do grid regular.

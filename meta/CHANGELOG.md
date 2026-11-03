@@ -4,8 +4,8 @@
 > **Cresce**: entradas novas no topo. Registra só o que foi de fato concluído/entregue.
 
 ## [Não lançado]
-### Adicionado
-- (nada pendente.)
+### Corrigido
+- Rótulo do segundo destino de saída cortado a 1366×768 (agora «Salvar cópia em outro destino»).
 
 ---
 

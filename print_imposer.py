@@ -1403,7 +1403,7 @@ class ConfigPanel(ctk.CTkFrame):
                       command=self._pick_dir).grid(row=0, column=1, padx=(4, 0))
 
         self._dir2_on_var = tk.BooleanVar(value=self.cfg.output_dir2_on)
-        ctk.CTkCheckBox(f5, text="Salvar também em um segundo destino",
+        ctk.CTkCheckBox(f5, text="Salvar cópia em outro destino",
                         variable=self._dir2_on_var, command=self._on_output).grid(
             row=5, column=0, columnspan=2, sticky="w", padx=4, pady=(6, 0))
 

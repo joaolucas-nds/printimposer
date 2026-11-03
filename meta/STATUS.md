@@ -7,25 +7,13 @@
 ---
 
 ## Versão Atual
-**1.1.1** — 2026-07-19 — F2 com as correções do primeiro smoke test: app volta a abrir (FIX-003), fim da corrida de DPI (FIX-004), janela respeita a barra de tarefas (FIX-005).
+**1.1.1** — 2026-07-22 — F2 **concluída**. Segundo smoke passou: app abre, `.bat` funciona, interface aprovada. Fecha FIX-003, FIX-004 e FIX-005.
 
-## ⚠️ Pendente de re-validação (prioridade da próxima sessão)
-O smoke test de 2026-07-19 rodou e **achou três bugs**, todos corrigidos via instrução ASU `260719-asu0001.yaml`. As correções foram validadas em simulação (resultado byte a byte idêntico ao arquivo testado) e por **48 testes headless verdes**, mas **a GUI ainda não foi aberta depois delas**.
+## 🎯 Foco atual
+**F3 — Interface e descoberta.** Spec aprovada em `meta/SPEC-F3-UI.md`; implementação ainda não começou.
+A instrução `260722-asu0003.yaml` já foi aplicada e verificada (VERSION 1.1.1, docstrings realinhadas). A conversa foi transferida em 2026-07-22 por peso; retomar pelo `260722-HANDOFF-BRIEF.md`.
 
-Rodar de novo, na íntegra:
-```
-python tests\test_engine.py     (deve dar 48 OK)
-python print_imposer.py          (checklist de 9 itens no CLAUDE.md)
-```
-No Claude Code: `/smoke`. Itens de maior risco agora:
-1. **Abertura** — era o bloqueador; confirmar que o app sobe.
-8. **`.bat`** — falhava só por causa do bloqueador; deve funcionar agora.
-2. **Barra de ação** — o botão "Gerar Arquivos" precisa estar inteiro, acima da barra de tarefas.
-Extra: **gerar com o preview em voo** (mexer numa opção e clicar Gerar na sequência) e conferir que a folha sai no DPI configurado.
-
-**Ainda sem cobertura:** nitidez em monitor com zoom 125%/150% — o monitor do teste está a 100%. A troca para `CTkImage` deve ter resolvido o aviso do CustomTkinter, mas ninguém viu.
-
-## ✅ Funcionando *(48 testes verdes; itens 2–7 e 9 confirmados no smoke de 19/07)*
+## ✅ Funcionando *(48 testes verdes; smoke completo de 22/07)*
 - Grade livre `cols × rows` até 12×12, com atalhos e miniatura do grid.
 - Lista de imagens com miniatura, quantidade, reordenação; "+ Arquivos" e "+ Pasta".
 - Ajuste fit / fill / stretch + Auto-Rotate.
@@ -42,12 +30,14 @@ Extra: **gerar com o preview em voo** (mexer numa opção e clicar Gerar na sequ
 - (vazio) — F2 entregue; aguardando o smoke test para fechar.
 
 ## ❌ Quebrado / Com Problema
-- (nada conhecido) — os três bugs do smoke de 19/07 foram corrigidos na 1.1.1 (FIX-003, FIX-004, FIX-005). Aguardando o segundo smoke para confirmar.
+- **Menu de presets não atualiza sem reiniciar** — um preset recém-salvo só aparece na lista depois de reabrir o app. O `configure(values=...)` é feito por varredura frágil da árvore de widgets. **Morre na F3**, quando presets viram submenu reconstruído a cada abertura.
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nas próximas sessões. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
-- [ ] Aplicar `260719-asu0001.yaml` e rodar o segundo smoke *(bloqueia o fechamento da F2)*.
-- [ ] Conferir nitidez em monitor com zoom 125%/150% — único item do checklist nunca exercitado.
+- [ ] **(1º na próxima conversa)** Tratar o update do KCM v1.101.0, se o usuário o subir — comparar e reportar, não aplicar.
+- [ ] Implementar a F3 conforme `meta/SPEC-F3-UI.md`.
+- [ ] Conferir nitidez em monitor com zoom 125%/150% — segue sem exercitar (monitor a 100%).
+- [ ] Atualizar o README: ainda documenta a 1.0 (lista fixa de N-up, PDF padrão, saída na Área de Trabalho).
 - [ ] Instalar um back-end de SVG no Windows e confirmar que o cabeçalho mostra o nome certo. `cairosvg` precisa de libcairo; `svglib` precisa de `rlPyCairo` — nenhum é 100% Python puro na hora de desenhar (ver FIX-002).
 - [ ] Menu de presets: os valores só recarregam ao reabrir o app; fazer o refresh na hora de salvar.
 - [ ] Avaliar `Image.draft()` também no caminho de composição (hoje só na miniatura).
@@ -59,4 +49,6 @@ Extra: **gerar com o preview em voo** (mexer numa opção e clicar Gerar na sequ
 - `meta/CEREBRO.md` — alinhado ao kit v1.73.0; customização volta a divergir dos updates, então registre em «Feedback para o Kit».
 
 ## 💬 Última Sessão
-**2026-07-19 (noite)** — O primeiro smoke test rodou na raia de validação e provou seu valor: achou **um bloqueador que a suíte de 40 testes não pegava** — a 1.1.0 simplesmente não abria, por colisão de `self._w` com o pathname Tcl do Tkinter. Achou também a corrida de DPI entre preview e geração (folha saindo em 72 DPI silenciosamente) e a janela invadindo a barra de tarefas. Os três viraram FIX-003/004/005 e foram corrigidos por **instrução ASU** — a primeira do projeto —, com 8 testes de regressão novos, cada um provado por reintrodução do bug. Próximo passo óbvio: aplicar o YAML e rodar o segundo smoke.
+
+**2026-07-22 (fim)** — F2 fechada e spec da F3 aprovada. Confirmado que o `260722-asu0003.yaml` aplicou certo (VERSION 1.1.1, 0 docstrings desalinhadas; 48 testes verdes na estrutura real `printimposer/tests/`). Conversa transferida por peso — a próxima arranca do `260722-HANDOFF-BRIEF.md`, e deve começar pelo update do KCM (CEREBRO em v1.73.0, KCM real em v1.101.0). Próximo passo de código: implementar a F3 (`meta/SPEC-F3-UI.md`), em arquivo inteiro.
+

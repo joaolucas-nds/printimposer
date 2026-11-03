@@ -238,6 +238,30 @@ Montar `CLAUDE.md` e `.claude/` para o Claude Code atuar como **raia de execuç�
 
 ---
 
+## DEC-011 — Painel de configuração híbrido: zonas fixas + accordion, e menubar para ações
+**Data:** 2026-07-22 · **Status:** aceita *(a implementar na F3)*
+
+### Contexto
+O painel central empilhava 7 seções numa rolagem única (~1400 px). O contador de folhas e a guarda de qualidade — que são feedback, não configuração — só apareciam no fim da rolagem. O gerador de `.bat`, usado uma vez na vida, ocupava espaço permanente.
+
+### Decisão
+Três zonas: **fixa no topo** (Grade + mini-grid), **accordion no meio** (Papel, Ajuste, Margens, Corte, Saída — esta aberta por padrão), **fixa no rodapé** (contador, guarda de qualidade, tamanho da célula). Ações que não são configuração — `.bat`, presets, sobre, guia — migram para uma **menubar `Arquivo · Opções · Ajuda`** na topbar. Accordion é multi-aberto e o estado persiste entre sessões.
+
+### Alternativas consideradas
+- **Tabs** — descartadas por dois motivos independentes: são 6 seções com rótulos longos em PT-BR, acima do limite prático de 3–5 abas; e as duas mais mexidas (Grade e Saída) cairiam em abas diferentes, forçando alternância constante. A pesquisa é explícita: tabs perdem quando o usuário precisa ir e voltar.
+- **Accordion puro** — mais simples, mas colapsaria a Grade (a seção com feedback visual, mexida a cada trabalho) e deixaria a guarda de qualidade dependente de abrir algo. Contraria diretamente a regra de não esconder conteúdo essencial.
+- **Manter a rolagem e só mover o `.bat`** — resolveria um sintoma e deixaria a causa.
+- **Menubar nativa** (`self.config(menu=…)`) — mais barata, mas o Windows desenha a faixa em cinza claro, destoando do tema escuro. Optou-se por `CTkButton` + `tk.Menu.tk_popup()`: faixa no tema do app, dropdown nativo (teclado e dismissal de graça).
+
+### Consequências
+- Altura empilhada da coluna cai de ~1400 px para ~560 px: sem rolagem no uso normal em 768 px.
+- O bug do menu de presets que não atualizava morre por construção — o submenu é reconstruído a cada abertura.
+- Novo componente `CollapsibleSection` e nova chave `sections_open` no `settings.json` (compatível para trás: arquivo antigo cai no padrão).
+- Mais superfície de UI para o smoke test cobrir; quatro itens novos no checklist.
+- Entrega em **arquivo inteiro** — reescrita profunda de `ConfigPanel`, conforme DEC-007.
+
+---
+
 ## FIX-003 — Sobrescrever `_w` colide com o Tkinter e impede o app de abrir
 **Data:** 2026-07-19 · **Gravidade: bloqueador** — a 1.1.0 não abria.
 

@@ -33,6 +33,12 @@
 - **`print_imposer.py`** — o app inteiro; rodar com `python print_imposer.py`.
 - **`compose_page(page_idx, paths, override_dpi=None)`** — monta uma folha; com `override_dpi=72` é o caminho do preview.
 
+## Termos da F3 (interface)
+- **Zona fixa** — faixa do painel de configuração que não rola: a Grade no topo, o contador + guarda de qualidade no rodapé. Existe porque conteúdo essencial não pode depender de rolagem (DEC-011).
+- **Accordion** — seções colapsáveis empilhadas. No PrintImposer é **multi-aberto** (abrir uma não fecha as outras) e o estado persiste em `sections_open`.
+- **Progressive disclosure** — mostrar o essencial e deferir o raramente usado para uma tela secundária (Nielsen, 1995). É o princípio que manda `.bat`, presets e "sobre" para a menubar.
+- **Ação × configuração** — distinção que guia o que fica no painel e o que vai para o menu: configuração descreve *como* a folha é montada; ação é algo que se *faz* uma vez (gerar atalho, salvar preset).
+
 ## Termos da 1.1
 - **Área útil (work area)** — retângulo da tela sem a barra de tarefas. No Windows vem de `SPI_GETWORKAREA`. Diferente de `winfo_screenheight()`, que é a tela física (FIX-005).
 - **Nome reservado do Tkinter** — atributo que `tkinter.Misc` usa internamente (`_w`, `_name`, `_tclCommands`, `master`, `tk`, `children`). Escrever neles a partir de uma subclasse quebra o widget (FIX-003).

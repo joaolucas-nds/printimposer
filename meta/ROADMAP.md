@@ -14,9 +14,9 @@
 - Saída PDF/PNG/JPEG/TIFF (DEC-006); linhas de corte atravessando a folha (DEC-005).
 - Correção do crash PanedWindow×CTkScrollableFrame (FIX-001).
 
-## 🟡 F2 — Controle, persistência e janela *(entregue na 1.1.1; fecha no 2º smoke)*
+## 🟢 F2 — Controle, persistência e janela *(concluída na 1.1.1)*
 **Objetivo:** acabar com a reconfiguração repetida e com a necessidade de editar o código para mudar layout.
-**Critério de conclusão:** ✅ atingido no código; ⏳ **pendente do 2º smoke test** — o 1º achou três bugs (FIX-003/004/005), já corrigidos.
+**Critério de conclusão:** ✅ atingido. O 1º smoke achou três bugs (FIX-003/004/005); corrigidos, o 2º smoke passou em 2026-07-22.
 - ✅ Grade livre `cols × rows` até 12×12 (DEC-009) — resolve o 2×6 e qualquer outro.
 - ✅ Presets nomeados (.json) com a configuração inteira; miniatura do grid.
 - ✅ Persistência de config e geometria em `~/.printimposer/settings.json`.
@@ -26,11 +26,25 @@
 - ✅ Gerador de `.bat`; botão "+ Pasta"; guarda de qualidade.
 - ✅ Carregamento: `Image.draft()` em JPEG + cache de miniatura (só a parte segura).
 - ✅ Suíte headless com 40 testes.
-- ✅ 1º smoke test executado: itens 2–7 e 9 passaram; 1 e 8 falharam pelo bloqueador, corrigido.
-- ⏳ 2º smoke test após aplicar `260719-asu0001.yaml` — único item aberto da fase.
-- ⏳ Nitidez em zoom 125%/150% — nunca exercitada (monitor do teste a 100%).
+- ✅ 1º smoke: itens 2–7 e 9 passaram; 1 e 8 falharam pelo bloqueador.
+- ✅ 2º smoke (22/07): app abre, `.bat` funciona, interface aprovada pelo usuário.
+- ⏳ Nitidez em zoom 125%/150% — segue sem exercitar (monitor a 100%). Movida para a F3.
 
-## 🔵 F3 — Qualidade profissional *(próxima, após fechar a F2)*
+## 🟡 F3 — Interface e descoberta *(próxima)*
+**Objetivo:** acabar com a rolagem para configurar, e tirar do painel o que é ação em vez de configuração.
+**Critério de conclusão:** em 1366×768, configurar um trabalho comum sem rolar; contador e guarda de qualidade sempre visíveis; `.bat`, presets, sobre e guia acessíveis por menubar.
+**Spec:** `meta/SPEC-F3-UI.md` (aprovada em 22/07). **Fundamento:** HISTORY §9.
+- [ ] `CollapsibleSection` — accordion multi-aberto, com `grid_remove()` e cabeçalho focável.
+- [ ] Zona fixa superior: Grade + mini-grid (fora do accordion).
+- [ ] Zona fixa inferior: contador de folhas, guarda de qualidade e tamanho da célula.
+- [ ] Menubar `Arquivo · Opções · Ajuda` na topbar, com atalhos de teclado.
+- [ ] Diálogo "Criar atalho" que explica antes de gerar (substitui a seção `.bat`).
+- [ ] Presets migram para `Opções › Presets ▸` — mata o bug do menu que não atualizava.
+- [ ] Guia rápido "Figma → impressão" em Ajuda.
+- [ ] `sections_open` no `settings.json`, com padrão para arquivo antigo.
+- [ ] Nitidez em zoom 125%/150% — verificar no smoke (herdada da F2).
+
+## 🔵 F4 — Qualidade profissional *(futuro, sem data)*
 **Objetivo:** aproximar a saída do padrão de gráfica e acabar com a perda de qualidade na origem.
 **Critério de conclusão:** PDF entra como fonte vetorial; marcas de canto e sangria disponíveis; compressão escolhível.
 - ✅ ~~Entrada SVG~~ — antecipada e entregue na 1.1.0.
@@ -43,7 +57,7 @@
 - Barra de estado com px, MB estimados e selo de qualidade.
 - **Imposição vetorial de ponta a ponta** (pypdf/reportlab): qualidade perfeita e arquivos minúsculos; pode exigir modularizar (revisitar DEC-003).
 
-## 🔵 F4 — Distribuição, fluidez e layouts livres *(futuro, sem data)*
+## 🔵 F5 — Distribuição, fluidez e layouts livres *(futuro, sem data)*
 **Objetivo:** facilitar adoção por quem não tem Python e soltar as amarras do grid regular.
 **Critério de conclusão:** executável Windows distribuível; manipulação por arraste; layout não-uniforme possível.
 - Empacotar como .exe (PyInstaller, com hook do `tkinterdnd2`).
@@ -57,5 +71,6 @@
 
 ## 🚫 Itens descartados desta visão
 - **SVG como formato de saída** — sem ganho com arte raster; qualidade vetorial vem da entrada (F3). (Entrada SVG segue ativa.)
-- **Raia de desenvolvimento no Claude Code como modo padrão** — ver DEC-007; gatilho de reabertura registrado lá.
+- **Raia de desenvolvimento no Claude Code como modo padrão** — ver DEC-007 e DEC-010 (virou raia de validação).
+- **Tabs para as configurações** — descartadas na análise da F3: 6 seções com rótulos longos passam do limite prático de 3–5 abas, e as duas mais usadas cairiam em abas diferentes. Ver SPEC-F3-UI §2.
 - **Software de prepress completo** (separação de cores, trapping, registro multi-plate, booklet) — fora do escopo (ver CONTEXT §"O que o projeto NÃO é").

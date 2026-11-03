@@ -92,7 +92,7 @@ SVG_BACKEND = _probe_svg_backend()
 # CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION  = "1.1.0"
+VERSION  = "1.1.1"
 APP_NAME = "PrintImposer"
 MM_TO_INCH = 1.0 / 25.4
 
@@ -414,7 +414,7 @@ class ImpositionEngine:
 
     def _mm_px(self, mm: float, dpi: Optional[int] = None) -> int:
         """Converte mm para px. O `dpi` explícito existe para NÃO mutar cfg.dpi:
-    preview e geração rodam em threads distintas sobre o mesmo LayoutConfig."""
+        preview e geração rodam em threads distintas sobre o mesmo LayoutConfig."""
         return max(0, int(round(mm * (dpi or self.cfg.dpi) * MM_TO_INCH)))
 
     def _page_px(self, dpi: Optional[int] = None) -> Tuple[int, int]:
@@ -591,12 +591,11 @@ class ImpositionEngine:
     def compose_page(self, page_idx: int, image_paths: List[str],
                      override_dpi: Optional[int] = None) -> Image.Image:
         """Compõe uma folha no DPI pedido (ou no do config).
-
-    NÃO muta `cfg.dpi`. A versão anterior trocava o valor e restaurava num
-    `finally` — correto em uso sequencial, mas preview e geração rodam em
-    threads distintas sobre o MESMO LayoutConfig: gerar enquanto o preview
-    compunha produzia a folha em 72 DPI, silenciosamente. Ver FIX-004.
-    """
+        NÃO muta `cfg.dpi`. A versão anterior trocava o valor e restaurava num
+        `finally` — correto em uso sequencial, mas preview e geração rodam em
+        threads distintas sobre o MESMO LayoutConfig: gerar enquanto o preview
+        compunha produzia a folha em 72 DPI, silenciosamente. Ver FIX-004.
+        """
         cfg = self.cfg
         cols, rows = self._grid()
         nup    = cols * rows
@@ -1641,11 +1640,10 @@ class PrintImposerApp(ctk.CTk):
 
     def _setup_geometry(self):
         """Centraliza a janela dentro da ÁREA ÚTIL da tela.
-
-    Dois cuidados: o clamp usa a área útil (não a tela física), para a barra
-    de ação não ficar sob a barra de tarefas; e a posição salva só é
-    reaproveitada se ainda couber no monitor atual. Ver HISTORY §6 e FIX-005.
-    """
+        Dois cuidados: o clamp usa a área útil (não a tela física), para a barra
+        de ação não ficar sob a barra de tarefas; e a posição salva só é
+        reaproveitada se ainda couber no monitor atual. Ver HISTORY §6 e FIX-005.
+        """
         self.update_idletasks()
         ax, ay, aw, ah = self._work_area()
 

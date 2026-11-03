@@ -156,3 +156,47 @@ Hoje, `ImageEntry._load_thumb` abre a imagem inteira só para gerar uma miniatur
 - Cache em disco — inventa gestão de invalidação e lixo por um ganho pequeno nesta escala.
 
 Alinhado à ressalva do usuário: aplicar só o seguro; o resto não compensa o risco.
+
+
+## 9. Pesquisa de UX para o painel de configuração (2026-07)
+
+Levantamento feito antes de reestruturar o painel central (DEC-011, SPEC-F3-UI).
+
+### Accordion × tabs — o critério de decisão
+
+| | Tabs | Accordion |
+|---|---|---|
+| Quantidade que suporta | 3–5; quebra acima disso | 5 a 20, escala bem |
+| Rótulos longos | quebram a linha ou truncam | sem problema (espaço horizontal sobra) |
+| Alternar muito entre seções | bom | custa um clique a mais |
+| Comparar duas seções ao mesmo tempo | impossível | possível se multi-aberto |
+| Tela estreita/baixa | conteúdo é empurrado para fora | espelha o comportamento amplo |
+
+Regra prática que saiu disso: **tabs para modos de visualização mutuamente exclusivos; accordion para blocos de configuração independentes.** O padrão do Asana é citado como referência — tabs separam modos de visualização, accordion organiza a lista dentro.
+
+No PrintImposer, tabs foram descartadas por dois motivos independentes: são 6 seções com rótulos longos em PT-BR ("Margens e espaçamento"), e as duas mais mexidas — Grade e Saída — cairiam em abas diferentes, exatamente o cenário em que tabs perdem.
+
+### Erros a evitar (valem como checklist)
+1. **Esconder conteúdo essencial** dentro de painel colapsado que o usuário pode nunca abrir — inclui CTA, campo obrigatório e, no nosso caso, **aviso de qualidade e contador de folhas**. Foi o erro mais grave da v1.1.
+2. **Nenhuma seção aberta por padrão** — a tela parece vazia e não convida. Sempre abrir a mais importante.
+3. **Rótulos vagos** — se o usuário não consegue prever o que tem dentro, não clica.
+4. **Excesso de cliques** — colapsar tudo transfere trabalho para o usuário.
+
+### Progressive disclosure (Nielsen, 1995)
+Definição: *deferir funcionalidades avançadas ou raramente usadas para uma tela secundária, tornando a aplicação mais fácil de aprender e menos propensa a erro.* Números citados na literatura: **30–50% mais rápido** na conclusão da tarefa inicial, mantendo **70–90%** de descoberta das funções avançadas.
+
+Mecanismos que a fazem funcionar: padrões default que servem à maioria sem configuração; affordances óbvias de expansão (chevron, "Avançado"); transição suave; e reversibilidade.
+
+Como decidir o que é essencial × avançado: **análise de frequência 80/20** por task analysis. No PrintImposer:
+
+| Muda a cada trabalho | Configura uma vez |
+|---|---|
+| Grade (cols × rows) · prefixo/formato de saída | Papel · DPI · modo de ajuste · margens · linhas de corte |
+
+E uma terceira categoria que a análise revelou: **ação, não configuração** — gerar `.bat`, salvar/carregar preset, ver "sobre". Não pertencem a um painel de configuração; pertencem a um menu. É o que motivou a menubar.
+
+### Menubar em CustomTkinter — nota de implementação
+Não existe menubar CTk nativa. Três caminhos:
+- `self.config(menu=tk.Menu(...))` — menubar real do SO. Mais barato e acessível, mas no Windows a faixa é desenhada pelo SO em cinza claro, destoando de um app escuro.
+- `CTkButton` + `tk.Menu.tk_popup()` — faixa no tema do app, dropdown nativo (teclado e dismissal de graça). **Escolhido.**
+- Popups próprios com `CTkToplevel` — controle total do visual, muito mais código e mais superfície para bugs de aninhamento (classe do FIX-003).

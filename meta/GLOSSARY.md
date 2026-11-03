@@ -1,6 +1,6 @@
 # GLOSSARY.md — Termos do Projeto
 
-> **Opcional.** Use quando o projeto tem vocabulário próprio (nomes de módulos, conceitos, identificadores) que o assistente reexplicaria a cada sessão sem isto.
+> **Opcional.** Use quando o projeto tem vocabulário próprio (nomes de módulos, conceitos, identificadores) que o assistente reexplicaria a cada conversa sem isto.
 > Mantenha curto: só o que não é óbvio para alguém de fora.
 
 ---
@@ -48,13 +48,14 @@
 - **Guarda de qualidade** — comparação entre os pixels da imagem-fonte e os da célula no DPI alvo. Veredito: `ok` (≥100%), `warn` (≥75%), `bad` (<75%), `none` (nada a julgar). SVG fica de fora.
 - **Back-end de SVG** — `cairosvg` ou `svglib`, escolhido por sondagem com render real (FIX-002). Ausente, `.svg` some da lista de formatos.
 - **Smoke test** — checklist manual de 9 itens da GUI, no `CLAUDE.md`. É o que a suíte headless não alcança.
-- **Raia de validação** — papel do Claude Code neste projeto: rodar, ver traceback e corrigir o que só aparece com a janela aberta (DEC-010). O chat continua como raia de autoria.
+- **Raia de execução** — papel do Claude Code desde a DEC-012: implementa o código a partir da spec/WO, roda suíte e GUI, faz o smoke, commita e empurra no verde. O chat é a raia de planejamento (spec, análise, WO). *(Até 2026-11-03 era «raia de validação», DEC-010.)*
 
 ## Ferramentas do fluxo de trabalho
-- **KCM / Kit de Contexto Universal** — o sistema de documentação (CEREBRO, CONTEXT, STATUS, DECISIONS…) que permite trocar de conversa sem perder contexto. Versão adotada: v1.73.0.
-- **ASU (Atualizador Automático de Scripts)** — ferramenta que aplica edições cirúrgicas em arquivos a partir de uma instrução `.yaml`. Modo padrão de edição de código deste projeto desde a DEC-007. Guias no conhecimento do Projeto: `INSTRUCTION_GUIDE.md`, `PROMPT_IA.md`.
+- **KCM / Kit de Contexto Universal** — o sistema de documentação (CEREBRO, CONTEXT, STATUS, DECISIONS…) que permite trocar de conversa sem perder contexto. Versão adotada: v1.133.0 (2026-11-03).
+- **ASU (Atualizador Automático de Scripts)** — ferramenta que aplica edições cirúrgicas em arquivos a partir de uma instrução `.yaml`. **Aposentado em 2026-11-03 (DEC-012)**; foi o modo de edição de código de 18/07 a 03/11 (DEC-007). Guia arquivado em `zz_backups/261103-INSTRUCTION_GUIDE-asu.md`.
 - **Instrução ASU** — arquivo `AAMMDD-asuNNNN.yaml` com âncoras copiadas literalmente do arquivo real. Aplicada com `python -m src apply <arquivo>.yaml --root <RAIZ> --dry-run`.
 - **FlatDrop** — ferramenta que achata a pasta do projeto para upload no Projeto do Claude, gerando `_MANIFEST.md` (mapa nome-plano → caminho real) e `_TREE.md`. O `.flatdropignore` controla o que sobe.
+- **WO (ordem de trabalho)** — `meta/workorders/AAMMDD-woNNNN-desc.md`: instrução de APLICAÇÃO (âncora + texto exato) que o chat escreve e o Code aplica com `/apply-wo`. Spec diz o QUÊ; WO diz COMO aplicar.
 - **Template-update** — pacote de arquivos genéricos do KCM com sufixo `__template-update`, para comparar com os vivos. Nunca sobrescreve conteúdo vivo.
 
 ## Identificadores

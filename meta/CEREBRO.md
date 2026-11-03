@@ -39,6 +39,8 @@ Comece vazia e escreva quando doer duas vezes: técnica que você precisou expli
 
 - **GUI só se valida com a janela aberta** (`print_imposer.py`). A suíte headless roda sobre um stub de `tkinter` e já passou com o app sem abrir (FIX-003). Toda mudança de interface fecha com `/smoke` no Code; o fecho do chat diz o que conferir na tela.
 - **Notas arquivadas vão para `zz_notas-arquivadas/`** (pasta-pai), não para `notas-arquivadas/`: o prefixo `zz_` é a convenção local para as pastas de arquivo morto ficarem no fim da listagem (`zz_backups/`, `zz_Launcher/`).
+- **Nesta máquina a ponte do chat GRAVA em `.claude/`** (medido em 2026-11-03: o chat reescreveu o `settings.json` direto). Então skill e `settings.json` o chat grava no lugar definitivo e a WO só versiona — a regra genérica de entregar o `settings.json` na pasta-pai não se aplica aqui (DEC-013).
+- **A skill que aplica a WO tem de existir ANTES da WO.** A wo0001 mandava rodar `/apply-wo` e só criava a skill dentro dela; o dono teve de copiar a pasta à mão. Instalar ou mudar skill que dirige a própria aplicação é do chat, no disco, antes de entregar a linha `/apply-wo`.
 - **Referência a seção do HISTORY é por número e o código cita** (`print_imposer.py` aponta HISTORY §6 e §8). Renumerar seção quebra o ponteiro: seção nova entra no fim, com o próximo número.
 
 ## Princípios de trabalho

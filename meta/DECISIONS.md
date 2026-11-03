@@ -315,3 +315,22 @@ O **chat planeja**: spec, análise e WO; cura CEREBRO, CONTEXT, GLOSSARY, Instru
 - Cada tarefa do Code grava relatório na pasta-pai (`AAMMDD-HHMM-code-printimposer-<ato>-<alvo>.txt`).
 - O guia do ASU foi para `zz_backups/`; as entradas «Feedback para o ASU» ficam no IDEAS como histórico.
 - A F3 (`meta/specs/SPEC-F3-UI.md`) passa a ser implementada pelo Code. O §12 da spec («entrega em arquivo inteiro») e a última consequência da DEC-011 («conforme DEC-007») ficam superados por esta decisão; o chat revisa a spec antes da WO da F3.
+
+---
+
+## DEC-013 — Nesta máquina o chat grava `.claude/` direto; skill nasce antes da WO que a usa
+**Data:** 2026-11-03 · **Status:** aceita · *(desvio registrado do kit v1.133)*
+
+### Contexto
+O kit manda o chat entregar o `settings.json` na pasta-pai para o dono copiar («a ponte do chat não grava em `.claude/`») e manda skill mudar por WO. Na wo0001 isso gerou dois atritos: a WO pedia `/apply-wo` e só criava a skill dentro dela — o dono teve de copiar a pasta de skills à mão para o Code conseguir começar [relatado pelo dono] —, e o `settings.json` entregue trazia regras `Write(...)` no deny que o Claude Code rejeita («never matches · use Edit»). No mesmo dia o chat corrigiu o `settings.json` gravando direto: a ponte desta máquina grava em `.claude/` [medido pelo chat].
+
+### Decisão
+O chat grava `.claude/settings.json` e `.claude/skills/*` direto no lugar definitivo; a WO só os versiona, com `sha1sum` no cabeçalho. Skill que dirige a aplicação de uma WO existe no disco ANTES de a WO ser entregue. Deny de arquivo usa só `Edit(...)`, que já cobre a escrita.
+
+### Alternativas consideradas
+- **Seguir o kit (pasta-pai + cópia pelo dono)** — passo manual sem necessidade nesta máquina; foi o que travou a wo0001.
+- **O Code edita `.claude/`** — o classificador bloqueia autoconcessão de permissão, e com razão.
+
+### Consequências
+- A barreira de autoconcessão continua: quem grava a permissão é o chat, quem a usa é o Code.
+- Se a ponte deixar de gravar em `.claude/` (outra máquina, outra versão do app), volta a regra do kit. O caso está em «Técnicas específicas» do CEREBRO.

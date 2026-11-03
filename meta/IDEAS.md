@@ -113,6 +113,7 @@ Executável Windows para quem não tem Python. **F4.**
 - **2026-11-03 — Revogação pelo fato achou o que o termo não acha.** A linha revogada v1.104 («não empurrar») vivia também no `.claude/settings.json` (deny `git push`), que nenhum `grep` pelo texto da tabela alcança. Sugestão: a tabela de revogadas citar também a forma em config, não só em prosa.
 - **2026-11-03 — `IDEAS__template-update` ainda traz «Feedback para o ASU» com o pacote declarando `ASU nao`.** Inconsistência do molde: a seção devia sair junto do modo.
 - **2026-11-03 — Instruções do painel × arquivo do repo divergiram em silêncio.** O painel do Projeto ficou com a versão genérica enquanto o arquivo do repo evoluía (ASU, nome de download). A regra «a fonte é o arquivo do repositório» só chegou na v1.133; antes dela não havia quem notasse.
+- **2026-11-03 — A WO de migração para skills dependia da skill que ela criava.** O pacote v1.133 manda migrar `.claude/commands/` → `.claude/skills/` por WO, e a WO se aplica com `/apply-wo` — que é uma das skills a criar. Projeto vindo de `commands/` trava no primeiro passo. Sugestão: o `_UPDATE-PROMPT` mandar instalar as skills do pacote ANTES de qualquer WO (fora da WO), e a regra «a ponte do chat não grava em `.claude/`» virar «confira se grava» — nesta máquina grava (DEC-013).
 
 ## 🔩 Feedback para o ASU
 > **Congelado em 2026-11-03:** o ASU foi aposentado (DEC-012). As entradas abaixo ficam como histórico; nada novo entra aqui.

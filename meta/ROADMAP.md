@@ -33,7 +33,7 @@
 ## 🟡 F3 — Interface e descoberta *(próxima)*
 **Objetivo:** acabar com a rolagem para configurar, e tirar do painel o que é ação em vez de configuração.
 **Critério de conclusão:** em 1366×768, configurar um trabalho comum sem rolar; contador e guarda de qualidade sempre visíveis; `.bat`, presets, sobre e guia acessíveis por menubar.
-**Spec:** `meta/SPEC-F3-UI.md` (aprovada em 22/07). **Fundamento:** HISTORY §9.
+**Spec:** `meta/specs/SPEC-F3-UI.md` (aprovada em 22/07, revisada em 03/11). **Implementação:** Claude Code, `wo0002`. **Fundamento:** HISTORY §9.
 - [ ] `CollapsibleSection` — accordion multi-aberto, com `grid_remove()` e cabeçalho focável.
 - [ ] Zona fixa superior: Grade + mini-grid (fora do accordion).
 - [ ] Zona fixa inferior: contador de folhas, guarda de qualidade e tamanho da célula.

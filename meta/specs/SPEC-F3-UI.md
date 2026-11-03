@@ -1,7 +1,9 @@
 # SPEC-F3-UI — Reestruturação do painel de configuração
 
 > Spec de implementação. Decisões tomadas em 2026-07-22 com base em pesquisa de UX (ver HISTORY §9).
-> Alvo: v1.2.0. Estado: aprovada, a implementar.
+> Alvo: v1.2.0. Estado: aprovada, a implementar — pelo Claude Code, via `meta/workorders/261103-wo0002-implementar-f3.md`.
+>
+> **Mudanças nesta revisão (2026-11-03):** §5, §6 e §10 — o atalho `.bat` passa a sugerir a **pasta-pai da raiz do projeto**, não a área de trabalho (nota do dono de 2026-07-23), e o rótulo do menu perde «na área de trabalho». §11 — item de smoke 5. §12 — entrega pela DEC-012 (Code implementa), não mais «arquivo inteiro / ASU» da DEC-007. Nenhuma outra decisão mudou.
 
 ---
 
@@ -84,7 +86,7 @@ Motivo: a faixa fica no tema escuro do app (um menubar nativo via `self.config(m
 |---|---|
 | Presets ▸ | submenu dinâmico: lista os salvos; `Salvar atual…`, `Excluir…` |
 | — separador — | |
-| Criar atalho na área de trabalho… | abre o diálogo da §6 |
+| Criar atalho… | abre o diálogo da §6 |
 | — separador — | |
 | Restaurar configurações padrão | confirma e reseta `LayoutConfig` |
 
@@ -101,12 +103,12 @@ O botão atual gera um arquivo sem explicar o que é. O diálogo passa a **ensin
 
 Conteúdo (um `CTkToplevel` modal, ~420×280):
 - **O que é:** um atalho `.bat` que abre o PrintImposer com dois cliques, sem janela de console.
-- **Onde salvar:** sugere a área de trabalho; qualquer pasta serve.
+- **Onde salvar:** sugere a **pasta-pai da raiz do projeto** — a pasta que contém a pasta do `print_imposer.py` (aqui, `C:\Users\alexk\Tools\PrintImposer\`). Pedido do dono, 2026-07-23: «o .bat é para ser gerado em uma pasta "anterior" a pasta raíz do projeto, entende? E não na área de trabalho, assim fica mais fácil para mim, organizar.» Qualquer pasta serve; o `.bat` grava caminhos absolutos.
 - **Se eu mover a ferramenta?** o atalho para de funcionar — gere outro.
 - Mostra o caminho do interpretador e do script que serão gravados.
 - Botões: `Criar atalho…` (abre o `asksaveasfilename` atual) · `Fechar`.
 
-Reaproveita `build_launcher_bat()` sem alteração.
+Reaproveita `build_launcher_bat()` sem alteração. Muda só o `initialdir` do `asksaveasfilename` em `_make_bat`: `Path(__file__).resolve().parent.parent`, com `Path.home()` de reserva se essa pasta não existir. O comentário dentro do `.bat` («Copie este .bat para onde quiser (area de trabalho, etc.)») continua válido e em ASCII.
 
 ## 7. Guia rápido (Ajuda)
 
@@ -154,7 +156,7 @@ CollapsibleSection(master, title, key, expanded=False, on_toggle=None)
 
 | Hoje | Vai para |
 |---|---|
-| Seção "Atalho" (`.bat`) | `Opções › Criar atalho na área de trabalho…` |
+| Seção "Atalho" (`.bat`) | `Opções › Criar atalho…` |
 | Seção "Presets" | `Opções › Presets ▸` |
 | Rodapé `n imagens · n por folha · n folhas` | **zona fixa** inferior |
 | Guarda de qualidade (dentro de "Papel") | **zona fixa** inferior |
@@ -179,10 +181,15 @@ O bug conhecido do menu de presets (só atualiza ao reabrir o app) **morre junto
 2. `Ctrl+O`, `Ctrl+Shift+O` e `Ctrl+G` funcionam com o foco em qualquer painel.
 3. Salvar um preset e abrir `Opções › Presets` **sem reiniciar** → o novo aparece.
 4. Em 1366×768, com todas as seções fechadas, nada é cortado e o rodapé fica visível.
+5. `Opções › Criar atalho…` → `Criar atalho…`: o seletor abre na pasta-pai da raiz do projeto (`…\PrintImposer\`), não na área de trabalho.
 
 ## 12. Formato de entrega
 
-**Arquivo inteiro**, não ASU. A mudança reescreve `ConfigPanel` por completo, acrescenta duas classes (`CollapsibleSection`, `MenuBar`), muda o `_build_ui` e o esquema de persistência — é reescrita profunda, o caso que a DEC-007 reserva para arquivo inteiro. O ASU volta para os ajustes localizados que vierem depois do smoke.
+**Implementação pelo Claude Code** (DEC-012), a partir desta spec, pela `wo0002`. O Code escreve o código em `print_imposer.py` e os testes em `tests/test_engine.py`, roda a suíte e o `/smoke` (os 9 itens do `CLAUDE.md` + os 5 da §11), e commita/empurra no verde.
+
+Decisão de **arquitetura** que esta spec não cobrir (por exemplo, mudar o contrato do `SettingsStore` além da chave `sections_open`, ou mexer no engine) **não** se decide na implementação: o Code para e relata. Detalhe de **código** (nomes privados, ordem de métodos, como montar os widgets) é dele.
+
+*(Revisão de 2026-07-22 dizia «arquivo inteiro, não ASU», pela DEC-007 — superada pela DEC-012.)*
 
 ## 13. Fora do escopo desta spec
 

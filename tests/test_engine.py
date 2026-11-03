@@ -120,7 +120,8 @@ class GeometryTests(unittest.TestCase):
     def test_celula_2x2_sem_margem(self):
         self.cfg.dpi = 300
         self.cfg.cols = self.cfg.rows = 2
-        self.cfg.margin_outer_mm = self.cfg.margin_between_mm = 0.0
+        self.cfg.margin_outer_mm = 0.0
+        self.cfg.margin_between_x_mm = self.cfg.margin_between_y_mm = 0.0
         cw, ch = self.eng.cell_px()
         self.assertEqual((cw, ch), (1240, 1754))   # metade exata de A4
 
@@ -129,14 +130,15 @@ class GeometryTests(unittest.TestCase):
         self.cfg.cols = self.cfg.rows = 2
         base_w, base_h = self.eng.cell_px()
         self.cfg.margin_outer_mm = 5.0
-        self.cfg.margin_between_mm = 3.0
+        self.cfg.margin_between_x_mm = self.cfg.margin_between_y_mm = 3.0
         new_w, new_h = self.eng.cell_px()
         self.assertLess(new_w, base_w)
         self.assertLess(new_h, base_h)
 
     def test_celula_mm_coerente(self):
         self.cfg.cols, self.cfg.rows = 2, 2
-        self.cfg.margin_outer_mm = self.cfg.margin_between_mm = 0.0
+        self.cfg.margin_outer_mm = 0.0
+        self.cfg.margin_between_x_mm = self.cfg.margin_between_y_mm = 0.0
         cw, ch = self.eng.cell_mm()
         self.assertAlmostEqual(cw, 105.0, places=1)   # A6 dentro de A4
         self.assertAlmostEqual(ch, 148.5, places=1)
@@ -323,6 +325,205 @@ class ConfigTests(unittest.TestCase):
 
     def test_cor_invalida_cai_para_branco(self):
         self.assertEqual(pi.ImpositionEngine._hex_rgb("nao-e-cor"), (255, 255, 255))
+
+
+class PdfWriterTests(unittest.TestCase):
+    """Escritor de PDF próprio (DEC-014): sem perda por padrão."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.cfg = pi.LayoutConfig()
+        self.cfg.dpi = 72
+        self.cfg.cols = self.cfg.rows = 2
+        self.cfg.output_format = "PDF"
+        self.cfg.output_dir = str(self.tmp / "out")
+        img = make_image(self.tmp / "src.png", 400, 560)
+        e = pi.ImageEntry(img); e.quantity = 9        # 3 folhas
+        self.eng = pi.ImpositionEngine([e], self.cfg)
+
+    def _pdf(self):
+        saved = self.eng.save(self.eng.generate_all())
+        return Path(saved[0]).read_bytes()
+
+    def test_sem_perda_e_o_padrao(self):
+        self.assertEqual(pi.LayoutConfig().pdf_compression, "lossless")
+
+    def test_sem_perda_usa_flate_e_nao_dct(self):
+        data = self._pdf()
+        self.assertEqual(data.count(b"/FlateDecode"), 3)
+        self.assertEqual(data.count(b"/DCTDecode"), 0)
+        self.assertEqual(data.count(b"/Predictor 15"), 3)
+
+    def test_xref_aponta_para_os_objetos(self):
+        data = self._pdf()
+        start = int(data.rsplit(b"startxref\n", 1)[1].split(b"\n")[0])
+        self.assertTrue(data[start:].startswith(b"xref\n"))
+        lines = data[start:].split(b"\n")
+        n = int(lines[1].split()[1])
+        self.assertEqual(n, 1 + 2 + 3 * 3)            # 0 + catálogo/páginas + 3 folhas
+        for num in range(1, n):
+            off = int(lines[2 + num][:10])
+            self.assertTrue(data[off:].startswith(b"%d 0 obj\n" % num), num)
+
+    def test_idat_embutido_igual_ao_do_png(self):
+        import io
+        pages = self.eng.generate_all()
+        buf = io.BytesIO(); pages[0].save(buf, "PNG")
+        _w, _h, idat = pi.png_idat(buf.getvalue())
+        out = self.tmp / "x.pdf"
+        pi.write_pdf(pages, str(out), 72, "lossless")
+        self.assertIn(idat, out.read_bytes())         # byte a byte, sem recomprimir
+
+    def test_columns_e_a_largura_da_folha(self):
+        data = self._pdf()
+        w = self.eng._page_px()[0]
+        self.assertIn(b"/Columns %d" % w, data)
+
+    def test_pdf_jpeg_usa_dct(self):
+        self.cfg.pdf_compression = "jpeg"
+        data = self._pdf()
+        self.assertEqual(data.count(b"/DCTDecode"), 3)
+        self.assertEqual(data.count(b"/FlateDecode"), 0)
+
+    def test_pdf_jpeg_usa_a_qualidade_escolhida(self):
+        import io
+        pages = self.eng.generate_all()
+        sizes = {}
+        for q in (50, 95):
+            out = self.tmp / f"q{q}.pdf"
+            pi.write_pdf(pages[:1], str(out), 72, "jpeg", q)
+            buf = io.BytesIO(); pages[0].save(buf, "JPEG", quality=q)
+            self.assertIn(buf.getvalue(), out.read_bytes())
+            sizes[q] = len(buf.getvalue())
+        self.assertLess(sizes[50], sizes[95])
+
+    def test_jpeg_usa_a_qualidade_do_campo(self):
+        import io
+        self.cfg.output_format = "JPEG"
+        self.cfg.jpeg_quality = 60
+        pages = self.eng.generate_all()
+        saved = self.eng.save(pages)
+        buf = io.BytesIO(); pages[0].convert("RGB").save(
+            buf, "JPEG", quality=60, dpi=(72, 72))
+        self.assertEqual(Path(saved[0]).stat().st_size, len(buf.getvalue()))
+
+    def test_qualidade_fora_do_limite_e_ajustada(self):
+        cfg = pi.LayoutConfig()
+        cfg.from_dict({"jpeg_quality": 10})
+        self.assertEqual(cfg.jpeg_quality, 50)
+        cfg.from_dict({"jpeg_quality": 500})
+        self.assertEqual(cfg.jpeg_quality, 100)
+        self.assertEqual(pi.clamp_jpeg_quality("abc", 95), 95)
+
+    def test_png_entrelacado_e_recusado(self):
+        import io
+        buf = io.BytesIO()
+        Image.new("RGB", (8, 8)).save(buf, "PNG")
+        raw = bytearray(buf.getvalue())
+        raw[28] = 1                                    # byte de entrelaçamento no IHDR
+        with self.assertRaises(ValueError):
+            pi.png_idat(bytes(raw))
+
+
+class SpacingTests(unittest.TestCase):
+    """Espaçamento independente em X (colunas) e Y (linhas)."""
+
+    def setUp(self):
+        self.cfg = pi.LayoutConfig()
+        self.cfg.dpi = 300
+        self.cfg.cols = self.cfg.rows = 2
+        self.eng = pi.ImpositionEngine([], self.cfg)
+
+    def test_so_x_afasta_so_colunas(self):
+        base_w, base_h = self.eng.cell_px()
+        self.cfg.margin_between_x_mm = 10.0
+        self.cfg.margin_between_y_mm = 0.0
+        w, h = self.eng.cell_px()
+        self.assertLess(w, base_w)
+        self.assertEqual(h, base_h)
+
+    def test_so_y_afasta_so_linhas(self):
+        base_w, base_h = self.eng.cell_px()
+        self.cfg.margin_between_y_mm = 10.0
+        w, h = self.eng.cell_px()
+        self.assertEqual(w, base_w)
+        self.assertLess(h, base_h)
+
+    def test_cell_mm_acompanha_os_eixos(self):
+        self.cfg.margin_between_x_mm = 10.0
+        cw, ch = self.eng.cell_mm()
+        self.assertAlmostEqual(cw, 100.0, places=1)    # (210 - 10) / 2
+        self.assertAlmostEqual(ch, 148.5, places=1)
+
+    def test_linha_de_corte_acompanha_o_espaco(self):
+        tmp = Path(tempfile.mkdtemp())
+        self.cfg.dpi = 100
+        self.cfg.margin_between_x_mm = 10.0
+        self.cfg.margin_between_y_mm = 0.0
+        self.cfg.cut_lines = True
+        self.cfg.cut_color = "#FF0000"
+        self.cfg.cut_width_px = 1
+        img = make_image(tmp / "a.png", 200, 280, (0, 0, 255))
+        eng = pi.ImpositionEngine([], self.cfg)
+        page = eng.compose_page(0, [img] * 4)
+        cw, ch = eng.cell_px()
+        x_cut = cw + eng._mm_px(10.0) // 2             # meio do vão entre colunas
+        self.assertEqual(page.getpixel((x_cut, 5)), (255, 0, 0))
+        self.assertEqual(page.getpixel((5, ch)), (255, 0, 0))   # Y = 0: rente à célula
+
+    def test_config_antiga_vira_x_igual_y(self):
+        cfg = pi.LayoutConfig()
+        cfg.from_dict({"cols": 3, "margin_between_mm": 4.5})
+        self.assertEqual((cfg.margin_between_x_mm, cfg.margin_between_y_mm), (4.5, 4.5))
+        self.assertFalse(hasattr(cfg, "margin_between_mm"))
+
+    def test_preset_antigo_vira_x_igual_y_sem_mutar_o_dict(self):
+        cfg = pi.LayoutConfig()
+        preset = {"cols": 2, "margin_between_mm": 2.0}
+        cfg.from_dict(preset)
+        self.assertEqual((cfg.margin_between_x_mm, cfg.margin_between_y_mm), (2.0, 2.0))
+        self.assertIn("margin_between_mm", preset)     # o preset salvo não é alterado
+
+    def test_campos_novos_mandam_sobre_o_antigo(self):
+        cfg = pi.LayoutConfig()
+        cfg.from_dict({"margin_between_mm": 4.0, "margin_between_x_mm": 1.0})
+        self.assertEqual((cfg.margin_between_x_mm, cfg.margin_between_y_mm), (1.0, 4.0))
+
+    def test_preset_leva_os_campos_novos(self):
+        d = pi.LayoutConfig().preset_dict()
+        for k in ("margin_between_x_mm", "margin_between_y_mm",
+                  "pdf_compression", "jpeg_quality"):
+            self.assertIn(k, d)
+        self.assertNotIn("margin_between_mm", d)
+
+
+class SheetInfoTests(unittest.TestCase):
+    def test_folha_a4_300dpi(self):
+        eng = pi.ImpositionEngine([], pi.LayoutConfig())
+        w, h, mb = eng.sheet_info()
+        self.assertEqual((w, h), (2480, 3508))
+        self.assertAlmostEqual(mb, 2480 * 3508 * 3 / 1048576, places=6)
+
+
+class ExtraFormatsTests(unittest.TestCase):
+    def test_avif_presente_sse_o_pillow_le(self):
+        from PIL import features
+        self.assertEqual('.avif' in pi.RASTER_EXT, bool(features.check("avif")))
+
+    def test_heic_presente_sse_pillow_heif_registrou(self):
+        self.assertEqual('.heic' in pi.RASTER_EXT, pi.HEIF_OK)
+        self.assertEqual('.heif' in pi.RASTER_EXT, pi.HEIF_OK)
+
+    def test_sem_pillow_heif_a_sonda_falha_sem_quebrar(self):
+        saved = sys.modules.get("pillow_heif")
+        sys.modules["pillow_heif"] = None              # import vira ImportError
+        try:
+            self.assertFalse(pi._probe_heif())
+        finally:
+            if saved is None:
+                sys.modules.pop("pillow_heif", None)
+            else:
+                sys.modules["pillow_heif"] = saved
 
 
 class SvgTests(unittest.TestCase):
@@ -642,7 +843,7 @@ class MenuAndDialogTests(unittest.TestCase):
         self.assertLessEqual(pi.ConfigPanel.BOTTOM_H, 84)
 
     def test_versao(self):
-        self.assertEqual(pi.VERSION, "1.2.0")
+        self.assertEqual(pi.VERSION, "1.3.0")
 
 
 class LauncherTests(unittest.TestCase):

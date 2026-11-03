@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PrintImposer v1.2.0
+PrintImposer v1.3.0
 Ferramenta de Imposição de Páginas para Impressão em Massa
 
 Selecione imagens, configure o layout e gere PDFs/PNGs prontos para impressão.
@@ -19,6 +19,13 @@ Novidades da 1.2 (fase F3 do ROADMAP, SPEC-F3-UI):
   - Menubar Arquivo / Opções / Ajuda; presets e atalho .bat saíram do painel
   - Painel de configuração em três zonas: grade fixa, accordion, resumo fixo
   - Seções abertas/fechadas lembradas entre sessões (`sections_open`)
+
+Novidades da 1.3 (fase F4, etapa 1 — SPEC-F4-etapa1):
+  - PDF sem perda por padrão: escritor próprio embute o fluxo do PNG (DEC-014)
+  - Compressão escolhível: PDF sem perda/JPEG e qualidade JPEG de 50 a 100
+  - Espaçamento independente entre colunas e entre linhas
+  - Rodapé mostra o tamanho da folha em px e o tamanho bruto em MB
+  - Entrada AVIF (nativa do Pillow) e HEIC/HEIF (com `pillow-heif`, opcional)
 """
 
 import os
@@ -37,7 +44,9 @@ import customtkinter as ctk
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
+import struct
 from PIL import Image, ImageDraw, ImageTk
+from PIL import features as _pil_features
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -94,14 +103,45 @@ SVG_BACKEND = _probe_svg_backend()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# SUPORTE OPCIONAL A AVIF / HEIC
+# ══════════════════════════════════════════════════════════════════════════════
+# AVIF: o Pillow 12 lê sozinho, mas só se foi compilado com o codec — sondamos
+# a capacidade (FIX-002), não o import. HEIC/HEIF: precisa do `pillow-heif`;
+# sem ele a extensão nem aparece no seletor e o app abre igual.
+
+def _probe_avif() -> bool:
+    try:
+        return bool(_pil_features.check("avif"))
+    except Exception:
+        return False
+
+
+def _probe_heif() -> bool:
+    try:
+        import pillow_heif  # type: ignore
+        pillow_heif.register_heif_opener()
+        return True
+    except Exception:
+        return False
+
+
+AVIF_OK: bool = _probe_avif()
+HEIF_OK: bool = _probe_heif()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION  = "1.2.0"
+VERSION  = "1.3.0"
 APP_NAME = "PrintImposer"
 MM_TO_INCH = 1.0 / 25.4
 
 RASTER_EXT = {'.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.webp', '.gif'}
+if AVIF_OK:
+    RASTER_EXT |= {'.avif'}
+if HEIF_OK:
+    RASTER_EXT |= {'.heic', '.heif'}
 SVG_EXT    = {'.svg'} if SVG_BACKEND else set()
 SUPPORTED_EXT = RASTER_EXT | SVG_EXT
 
@@ -142,6 +182,12 @@ LINE_STYLES  = ["Sólida", "Tracejada", "Pontilhada"]
 FIT_LABELS   = ["Ajustar (fit)", "Preencher (fill)", "Esticar (stretch)"]
 FIT_KEYS     = ["fit",           "fill",              "stretch"]
 OUT_FORMATS  = ["PNG", "PDF", "JPEG", "TIFF"]   # PNG primeiro: é o padrão agora
+
+# Compressão do PDF: chave persistida → rótulo na UI (DEC-014).
+PDF_COMP_KEYS   = ["lossless", "jpeg"]
+PDF_COMP_LABELS = ["Sem perda", "JPEG"]
+JPEG_Q_MIN, JPEG_Q_MAX = 50, 100
+PDF_HEADER = b"%PDF-1.4\n"
 
 # Limiares da guarda de qualidade (razão entre pixels da fonte e da célula).
 QUALITY_OK   = 1.00   # fonte >= célula: sem upscale
@@ -413,15 +459,25 @@ class ImageEntry:
             return None
 
 
+def clamp_jpeg_quality(value: Any, default: int = 95) -> int:
+    """Qualidade JPEG ajustada a 50–100; valor ilegível cai no `default`."""
+    try:
+        return max(JPEG_Q_MIN, min(JPEG_Q_MAX, int(value)))
+    except (TypeError, ValueError):
+        return default
+
+
 class LayoutConfig:
     """Estado completo de configuração. Serializa para JSON (presets e settings)."""
 
     # Campos que compõem um preset nomeado (tudo menos caminhos de pasta).
     PRESET_FIELDS = (
         "cols", "rows", "paper_key", "paper_w_mm", "paper_h_mm", "dpi",
-        "margin_outer_mm", "margin_between_mm", "bg_color", "fit_mode",
+        "margin_outer_mm", "margin_between_x_mm", "margin_between_y_mm",
+        "bg_color", "fit_mode",
         "auto_rotate", "cut_lines", "cut_color", "cut_width_px", "cut_style",
         "cut_dash", "output_format", "output_prefix", "output_suffix",
+        "pdf_compression", "jpeg_quality",
     )
 
     def __init__(self):
@@ -433,8 +489,9 @@ class LayoutConfig:
         self.paper_h_mm:        float = 297.0
         self.dpi:               int   = 300
         self.margin_outer_mm:   float = 0.0
-        self.margin_between_mm: float = 0.0
-        self.bg_color:          str   = "#FFFFFF"
+        self.margin_between_x_mm: float = 0.0          # entre colunas
+        self.margin_between_y_mm: float = 0.0          # entre linhas
+        self.bg_color:         str   = "#FFFFFF"
         self.fit_mode:          str   = "fit"
         self.auto_rotate:       bool  = True
         self.cut_lines:         bool  = False
@@ -445,6 +502,8 @@ class LayoutConfig:
         self.output_format:     str   = "PNG"          # PNG é o padrão agora
         self.output_prefix:     str   = "folha_"
         self.output_suffix:     str   = ""
+        self.pdf_compression:   str   = "lossless"     # DEC-014: sem perda é o padrão
+        self.jpeg_quality:      int   = 95             # serve ao JPEG e ao PDF-JPEG
         # Pastas independentes: abrir imagens não mexe em onde salvar.
         self.input_dir:         str   = str(Path.home())
         self.output_dir:        str   = default_output_dir()
@@ -455,9 +514,19 @@ class LayoutConfig:
         return self.__dict__.copy()
 
     def from_dict(self, d: dict):
+        # Configuração/preset da 1.2 trazia um espaçamento só: vira X = Y,
+        # a menos que o dado já traga os campos novos (eles mandam).
+        if "margin_between_mm" in d:
+            d = dict(d)   # não muta o dict do chamador (preset em memória)
+            legacy = d.pop("margin_between_mm")
+            d.setdefault("margin_between_x_mm", legacy)
+            d.setdefault("margin_between_y_mm", legacy)
         for k, v in d.items():
             if hasattr(self, k):
                 setattr(self, k, v)
+        self.jpeg_quality = clamp_jpeg_quality(self.jpeg_quality, self.jpeg_quality)
+        if self.pdf_compression not in PDF_COMP_KEYS:
+            self.pdf_compression = "lossless"
 
     def preset_dict(self) -> dict:
         """Só os campos de layout — um preset não carrega caminhos de pasta."""
@@ -465,6 +534,108 @@ class LayoutConfig:
 
     def nup(self) -> int:
         return max(1, self.cols) * max(1, self.rows)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ESCRITOR DE PDF (DEC-014)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def png_idat(png: bytes) -> Tuple[int, int, bytes]:
+    """Extrai (largura, altura, dados IDAT concatenados) de um PNG RGB 8 bits.
+
+    Só serve PNG sem entrelaçamento: o `/Predictor 15` do PDF espera linhas
+    sequenciais, e um PNG entrelaçado abriria embaralhado, sem erro nenhum.
+    """
+    if png[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("não é um PNG")
+    pos, idat, hdr = 8, [], None
+    while pos + 8 <= len(png):
+        length, ctype = struct.unpack(">I4s", png[pos:pos + 8])
+        data = png[pos + 8:pos + 8 + length]
+        if ctype == b"IHDR":
+            hdr = struct.unpack(">IIBBBBB", data)
+        elif ctype == b"IDAT":
+            idat.append(data)
+        elif ctype == b"IEND":
+            break
+        pos += 12 + length          # tamanho + tipo + dados + CRC
+    if hdr is None or not idat:
+        raise ValueError("PNG sem IHDR/IDAT")
+    w, h, depth, ctype_, _comp, _filt, interlace = hdr
+    if (depth, ctype_, interlace) != (8, 2, 0):
+        raise ValueError("PNG precisa ser RGB, 8 bits, sem entrelaçamento")
+    return w, h, b"".join(idat)
+
+
+def _pdf_num(v: float) -> str:
+    return f"{v:.4f}".rstrip("0").rstrip(".")
+
+
+def write_pdf(pages: List[Image.Image], path: str, dpi: int,
+              mode: str = "lossless", quality: int = 95) -> None:
+    """Grava as folhas num PDF sem depender de biblioteca de PDF.
+
+    `lossless` embute o fluxo Deflate do PNG da folha (`/FlateDecode`,
+    `/Predictor 15`) sem recomprimir — sem perda por construção. `jpeg` embute
+    os bytes do JPEG na qualidade pedida (`/DCTDecode`). O Pillow não serve:
+    grava RGB em PDF sempre como JPEG, sem opção de qualidade.
+    """
+    import io
+    quality = clamp_jpeg_quality(quality)
+    objs: List[bytes] = []            # objs[i] é o objeto de número i+1
+
+    def add(body: bytes) -> int:
+        objs.append(body)
+        return len(objs)
+
+    n_pages = len(pages)
+    # 1 = catálogo, 2 = árvore de páginas; cada folha usa 3 objetos seguidos.
+    add(b"<< /Type /Catalog /Pages 2 0 R >>")
+    kids = " ".join(f"{3 + 3 * i} 0 R" for i in range(n_pages))
+    add(f"<< /Type /Pages /Kids [{kids}] /Count {n_pages} >>".encode())
+
+    for i, page in enumerate(pages):
+        page = page.convert("RGB")
+        buf = io.BytesIO()
+        if mode == "jpeg":
+            page.save(buf, "JPEG", quality=quality)
+            w, h = page.size
+            data = buf.getvalue()
+            extra = "/Filter /DCTDecode"
+        else:
+            page.save(buf, "PNG")
+            w, h, data = png_idat(buf.getvalue())
+            extra = (f"/Filter /FlateDecode /DecodeParms << /Predictor 15 "
+                     f"/Colors 3 /BitsPerComponent 8 /Columns {w} >>")
+
+        w_pt, h_pt = w * 72.0 / dpi, h * 72.0 / dpi
+        content = (f"q {_pdf_num(w_pt)} 0 0 {_pdf_num(h_pt)} 0 0 cm /Im0 Do Q"
+                   ).encode()
+        pg, ct, im = 3 + 3 * i, 4 + 3 * i, 5 + 3 * i
+        add(f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {_pdf_num(w_pt)} "
+            f"{_pdf_num(h_pt)}] /Resources << /XObject << /Im0 {im} 0 R >> >> "
+            f"/Contents {ct} 0 R >>".encode())
+        add(b"<< /Length %d >>\nstream\n" % len(content) + content + b"\nendstream")
+        add((f"<< /Type /XObject /Subtype /Image /Width {w} /Height {h} "
+             f"/ColorSpace /DeviceRGB /BitsPerComponent 8 {extra} "
+             f"/Length {len(data)} >>\nstream\n").encode()
+            + data + b"\nendstream")
+
+    out = bytearray(PDF_HEADER)
+    offsets = []
+    for num, body in enumerate(objs, start=1):
+        offsets.append(len(out))                  # offset em BYTES
+        out += f"{num} 0 obj\n".encode() + body + b"\nendobj\n"
+    xref_pos = len(out)
+    out += f"xref\n0 {len(objs) + 1}\n".encode()
+    out += b"0000000000 65535 f \n"               # cada entrada tem 20 bytes
+    for off in offsets:
+        out += f"{off:010d} 00000 n \n".encode()
+    out += (f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\n"
+            f"startxref\n{xref_pos}\n%%EOF\n").encode()
+
+    with open(path, "wb") as fh:
+        fh.write(out)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -497,18 +668,25 @@ class ImpositionEngine:
         cols, rows = self._grid()
         pw, ph = self._page_px(dpi)
         mo = self._mm_px(self.cfg.margin_outer_mm, dpi)
-        mb = self._mm_px(self.cfg.margin_between_mm, dpi)
-        cw = max(1, (pw - 2*mo - (cols-1)*mb) // cols)
-        ch = max(1, (ph - 2*mo - (rows-1)*mb) // rows)
+        mbx = self._mm_px(self.cfg.margin_between_x_mm, dpi)
+        mby = self._mm_px(self.cfg.margin_between_y_mm, dpi)
+        cw = max(1, (pw - 2*mo - (cols-1)*mbx) // cols)
+        ch = max(1, (ph - 2*mo - (rows-1)*mby) // rows)
         return cw, ch
 
     def cell_mm(self) -> Tuple[float, float]:
         cols, rows = self._grid()
         cw = (self.cfg.paper_w_mm - 2*self.cfg.margin_outer_mm
-              - (cols-1)*self.cfg.margin_between_mm) / cols
+              - (cols-1)*self.cfg.margin_between_x_mm) / cols
         ch = (self.cfg.paper_h_mm - 2*self.cfg.margin_outer_mm
-              - (rows-1)*self.cfg.margin_between_mm) / rows
+              - (rows-1)*self.cfg.margin_between_y_mm) / rows
         return max(0.0, cw), max(0.0, ch)
+
+    def sheet_info(self, dpi: Optional[int] = None) -> Tuple[int, int, float]:
+        """(largura px, altura px, MB bruto) da folha. Bruto = RGB sem compressão:
+        o tamanho comprimido depende do conteúdo, então não é estimado."""
+        pw, ph = self._page_px(dpi)
+        return pw, ph, pw * ph * 3 / (1024 * 1024)
 
     # ── Contagem ─────────────────────────────────────────────────────────────
 
@@ -608,7 +786,7 @@ class ImpositionEngine:
         return cell
 
     def _draw_cuts(self, page: Image.Image, cols: int, rows: int,
-                   cw: int, ch: int, mo: int, mb: int):
+                   cw: int, ch: int, mo: int, mbx: int, mby: int):
         draw = ImageDraw.Draw(page)
         cfg  = self.cfg
         col  = cfg.cut_color
@@ -650,10 +828,10 @@ class ImpositionEngine:
             cfg.cut_style, solid)
 
         for c in range(1, cols):
-            x = mo + c * cw + (c - 1) * mb + (mb // 2 if mb > 0 else 0)
+            x = mo + c * cw + (c - 1) * mbx + (mbx // 2 if mbx > 0 else 0)
             fn(x, 0, x, ph)
         for r in range(1, rows):
-            y = mo + r * ch + (r - 1) * mb + (mb // 2 if mb > 0 else 0)
+            y = mo + r * ch + (r - 1) * mby + (mby // 2 if mby > 0 else 0)
             fn(0, y, pw, y)
 
     def compose_page(self, page_idx: int, image_paths: List[str],
@@ -669,7 +847,8 @@ class ImpositionEngine:
         nup    = cols * rows
         pw, ph = self._page_px(override_dpi)
         mo     = self._mm_px(cfg.margin_outer_mm, override_dpi)
-        mb     = self._mm_px(cfg.margin_between_mm, override_dpi)
+        mbx    = self._mm_px(cfg.margin_between_x_mm, override_dpi)
+        mby    = self._mm_px(cfg.margin_between_y_mm, override_dpi)
         cw, ch = self.cell_px(override_dpi)
 
         bg   = self._hex_rgb(cfg.bg_color)
@@ -683,8 +862,8 @@ class ImpositionEngine:
 
             col = slot % cols
             row = slot // cols
-            x   = mo + col * (cw + mb)
-            y   = mo + row * (ch + mb)
+            x   = mo + col * (cw + mbx)
+            y   = mo + row * (ch + mby)
 
             try:
                 # SVG rasteriza direto no tamanho da célula: zero upscale.
@@ -698,7 +877,7 @@ class ImpositionEngine:
             page.paste(cell, (x, y))
 
         if cfg.cut_lines:
-            self._draw_cuts(page, cols, rows, cw, ch, mo, mb)
+            self._draw_cuts(page, cols, rows, cw, ch, mo, mbx, mby)
 
         return page
 
@@ -757,11 +936,8 @@ class ImpositionEngine:
 
             if fmt == "PDF":
                 fpath = unique_path(f"{cfg.output_prefix}001{cfg.output_suffix}.pdf")
-                if len(pages) == 1:
-                    pages[0].save(fpath, "PDF", resolution=cfg.dpi)
-                else:
-                    pages[0].save(fpath, "PDF", resolution=cfg.dpi,
-                                  save_all=True, append_images=pages[1:])
+                write_pdf(pages, fpath, cfg.dpi, cfg.pdf_compression,
+                          cfg.jpeg_quality)
                 saved.append(fpath)
                 step += 1
                 if progress_cb:
@@ -771,7 +947,7 @@ class ImpositionEngine:
                     fpath = unique_path(
                         f"{cfg.output_prefix}{i+1:03d}{cfg.output_suffix}.{ext}")
                     if fmt == "JPEG":
-                        page.convert("RGB").save(fpath, "JPEG", quality=95,
+                        page.convert("RGB").save(fpath, "JPEG", quality=clamp_jpeg_quality(cfg.jpeg_quality),
                                                  dpi=(cfg.dpi, cfg.dpi))
                     elif fmt == "TIFF":
                         page.save(fpath, "TIFF", dpi=(cfg.dpi, cfg.dpi),
@@ -1279,21 +1455,27 @@ class ConfigPanel(ctk.CTkFrame):
     def _build_summary_zone(self, f):
         """Zona fixa de baixo: feedback (contador, célula, qualidade), não config."""
         self._sheet_info_var = tk.StringVar(value="")
-        ctk.CTkLabel(f, textvariable=self._sheet_info_var, anchor="w",
+        ctk.CTkLabel(f, textvariable=self._sheet_info_var, anchor="w", height=16,
                      font=ctk.CTkFont(size=11, weight="bold")).grid(
             row=0, column=0, sticky="w", padx=8, pady=(2, 0))
 
         self._cell_var = tk.StringVar(value="")
-        ctk.CTkLabel(f, textvariable=self._cell_var, anchor="w",
+        ctk.CTkLabel(f, textvariable=self._cell_var, anchor="w", height=14,
                      font=ctk.CTkFont(size=10),
                      text_color=("gray50", "gray60")).grid(
             row=1, column=0, sticky="w", padx=8)
 
+        self._sheet_var = tk.StringVar(value="")
+        ctk.CTkLabel(f, textvariable=self._sheet_var, anchor="w", height=14,
+                     font=ctk.CTkFont(size=10),
+                     text_color=("gray50", "gray60")).grid(
+            row=2, column=0, sticky="w", padx=8)
+
         self._qual_var = tk.StringVar(value="")
         self._qual_lbl = ctk.CTkLabel(f, textvariable=self._qual_var, anchor="w",
-                                      justify="left", wraplength=290,
+                                      justify="left", wraplength=290, height=28,
                                       font=ctk.CTkFont(size=10))
-        self._qual_lbl.grid(row=2, column=0, sticky="nw", padx=8)
+        self._qual_lbl.grid(row=3, column=0, sticky="nw", padx=8)
         # A quebra de linha acompanha a largura do painel (o divisor é móvel).
         f.bind("<Configure>", lambda e: self._qual_lbl.configure(
             wraplength=max(200, e.width - 24)))
@@ -1339,14 +1521,18 @@ class ConfigPanel(ctk.CTkFrame):
         self._mo_var = tk.StringVar(value=str(self.cfg.margin_outer_mm))
         self._num_entry(f3, self._mo_var, 0, cb=lambda _: self._on_margins())
 
-        self._lbl(f3, "Entre imagens (mm):", 1)
-        self._mb_var = tk.StringVar(value=str(self.cfg.margin_between_mm))
-        self._num_entry(f3, self._mb_var, 1, cb=lambda _: self._on_margins())
+        self._lbl(f3, "Entre colunas (mm):", 1)
+        self._mbx_var = tk.StringVar(value=str(self.cfg.margin_between_x_mm))
+        self._num_entry(f3, self._mbx_var, 1, cb=lambda _: self._on_margins())
 
-        self._lbl(f3, "Cor de fundo:", 2)
+        self._lbl(f3, "Entre linhas (mm):", 2)
+        self._mby_var = tk.StringVar(value=str(self.cfg.margin_between_y_mm))
+        self._num_entry(f3, self._mby_var, 2, cb=lambda _: self._on_margins())
+
+        self._lbl(f3, "Cor de fundo:", 3)
         self._bg_btn = ctk.CTkButton(f3, text="       ", width=65,
                                      fg_color=self.cfg.bg_color, command=self._pick_bg)
-        self._bg_btn.grid(row=2, column=1, sticky="w", padx=4, pady=2)
+        self._bg_btn.grid(row=3, column=1, sticky="w", padx=4, pady=2)
 
         # ── CORTE ──
         f4 = self._acc_section("corte", "Linhas de corte")
@@ -1382,19 +1568,38 @@ class ConfigPanel(ctk.CTkFrame):
                           command=lambda _: self._on_output(), width=100).grid(
             row=0, column=1, sticky="w", padx=4)
 
-        self._lbl(f5, "Prefixo:", 1)
-        self._pfx_var = tk.StringVar(value=self.cfg.output_prefix)
-        self._num_entry(f5, self._pfx_var, 1, width=130, cb=lambda _: self._on_output())
+        # Compressão (só PDF) e qualidade (JPEG e PDF-JPEG): aparecem conforme o
+        # formato — ver _sync_output_controls. Widgets guardados para esconder.
+        self._comp_lbl = ctk.CTkLabel(f5, text="Compressão:", anchor="w",
+                                      font=ctk.CTkFont(size=11))
+        self._comp_lbl.grid(row=1, column=0, sticky="w", padx=4, pady=2)
+        self._comp_var = tk.StringVar(
+            value=PDF_COMP_LABELS[PDF_COMP_KEYS.index(self.cfg.pdf_compression)])
+        self._comp_menu = ctk.CTkOptionMenu(
+            f5, variable=self._comp_var, values=PDF_COMP_LABELS,
+            command=lambda _: self._on_output(), width=100)
+        self._comp_menu.grid(row=1, column=1, sticky="w", padx=4)
 
-        self._lbl(f5, "Sufixo:", 2)
+        self._q_lbl = ctk.CTkLabel(f5, text="Qualidade (50–100):", anchor="w",
+                                   font=ctk.CTkFont(size=11))
+        self._q_lbl.grid(row=2, column=0, sticky="w", padx=4, pady=2)
+        self._q_var = tk.StringVar(value=str(self.cfg.jpeg_quality))
+        self._q_entry = self._num_entry(f5, self._q_var, 2,
+                                        cb=lambda _: self._on_output())
+
+        self._lbl(f5, "Prefixo:", 3)
+        self._pfx_var = tk.StringVar(value=self.cfg.output_prefix)
+        self._num_entry(f5, self._pfx_var, 3, width=130, cb=lambda _: self._on_output())
+
+        self._lbl(f5, "Sufixo:", 4)
         self._sfx_var = tk.StringVar(value=self.cfg.output_suffix)
-        self._num_entry(f5, self._sfx_var, 2, width=130, cb=lambda _: self._on_output())
+        self._num_entry(f5, self._sfx_var, 4, width=130, cb=lambda _: self._on_output())
 
         ctk.CTkLabel(f5, text="Pasta de saída:", anchor="w",
-                     font=ctk.CTkFont(size=11)).grid(row=3, column=0, columnspan=2,
+                     font=ctk.CTkFont(size=11)).grid(row=5, column=0, columnspan=2,
                                                      sticky="w", padx=4, pady=(6, 0))
         dir_row = ctk.CTkFrame(f5, fg_color="transparent")
-        dir_row.grid(row=4, column=0, columnspan=2, sticky="ew", padx=4)
+        dir_row.grid(row=6, column=0, columnspan=2, sticky="ew", padx=4)
         dir_row.columnconfigure(0, weight=1)
         self._dir_var = tk.StringVar(value=self.cfg.output_dir)
         ctk.CTkEntry(dir_row, textvariable=self._dir_var,
@@ -1405,16 +1610,17 @@ class ConfigPanel(ctk.CTkFrame):
         self._dir2_on_var = tk.BooleanVar(value=self.cfg.output_dir2_on)
         ctk.CTkCheckBox(f5, text="Salvar cópia em outro destino",
                         variable=self._dir2_on_var, command=self._on_output).grid(
-            row=5, column=0, columnspan=2, sticky="w", padx=4, pady=(6, 0))
+            row=7, column=0, columnspan=2, sticky="w", padx=4, pady=(6, 0))
 
         dir2_row = ctk.CTkFrame(f5, fg_color="transparent")
-        dir2_row.grid(row=6, column=0, columnspan=2, sticky="ew", padx=4)
+        dir2_row.grid(row=8, column=0, columnspan=2, sticky="ew", padx=4)
         dir2_row.columnconfigure(0, weight=1)
         self._dir2_var = tk.StringVar(value=self.cfg.output_dir2)
         ctk.CTkEntry(dir2_row, textvariable=self._dir2_var,
                      font=ctk.CTkFont(size=10)).grid(row=0, column=0, sticky="ew")
         ctk.CTkButton(dir2_row, text="…", width=30,
                       command=self._pick_dir2).grid(row=0, column=1, padx=(4, 0))
+        self._sync_output_controls()
 
     # ── Callbacks: grade ─────────────────────────────────────────────────────
 
@@ -1492,7 +1698,8 @@ class ConfigPanel(ctk.CTkFrame):
 
     def _on_margins(self):
         for var, attr in ((self._mo_var, "margin_outer_mm"),
-                          (self._mb_var, "margin_between_mm")):
+                          (self._mbx_var, "margin_between_x_mm"),
+                          (self._mby_var, "margin_between_y_mm")):
             try:
                 setattr(self.cfg, attr, max(0.0, float(var.get())))
             except ValueError:
@@ -1532,11 +1739,34 @@ class ConfigPanel(ctk.CTkFrame):
 
     def _on_output(self):
         self.cfg.output_format  = self._fmt_var.get()
+        self.cfg.pdf_compression = PDF_COMP_KEYS[
+            PDF_COMP_LABELS.index(self._comp_var.get())]
+        # Fora de 50–100 é ajustado ao limite e o campo mostra o valor usado.
+        self.cfg.jpeg_quality = clamp_jpeg_quality(self._q_var.get(),
+                                                   self.cfg.jpeg_quality)
+        self._q_var.set(str(self.cfg.jpeg_quality))
+        self._sync_output_controls()
         self.cfg.output_prefix  = self._pfx_var.get()
         self.cfg.output_suffix  = self._sfx_var.get()
         self.cfg.output_dir     = self._dir_var.get()
         self.cfg.output_dir2    = self._dir2_var.get()
         self.cfg.output_dir2_on = self._dir2_on_var.get()
+
+    def _sync_output_controls(self):
+        """Mostra «Compressão» só no PDF e «Qualidade» quando há JPEG no caminho
+        (formato JPEG, ou PDF com compressão JPEG). PNG/TIFF não têm controle."""
+        fmt = self._fmt_var.get()
+        is_pdf = fmt == "PDF"
+        if is_pdf:
+            self._comp_lbl.grid(); self._comp_menu.grid()
+        else:
+            self._comp_lbl.grid_remove(); self._comp_menu.grid_remove()
+        jpeg_q = fmt == "JPEG" or (
+            is_pdf and self._comp_var.get() == PDF_COMP_LABELS[1])
+        if jpeg_q:
+            self._q_lbl.grid(); self._q_entry.grid()
+        else:
+            self._q_lbl.grid_remove(); self._q_entry.grid_remove()
 
     def _pick_dir(self):
         d = filedialog.askdirectory(title="Pasta de saída",
@@ -1601,13 +1831,17 @@ class ConfigPanel(ctk.CTkFrame):
         self._paper_var.set(c.paper_key)
         self._pw_var.set(str(c.paper_w_mm)); self._ph_var.set(str(c.paper_h_mm))
         self._dpi_var.set(str(c.dpi))
-        self._mo_var.set(str(c.margin_outer_mm)); self._mb_var.set(str(c.margin_between_mm))
+        self._mo_var.set(str(c.margin_outer_mm)); self._mbx_var.set(str(c.margin_between_x_mm))
+        self._mby_var.set(str(c.margin_between_y_mm))
         self._bg_btn.configure(fg_color=c.bg_color)
         self._cuts_var.set(c.cut_lines)
         self._cut_style_var.set(c.cut_style)
         self._cut_w_var.set(str(c.cut_width_px)); self._cut_dash_var.set(str(c.cut_dash))
         self._cut_col_btn.configure(fg_color=c.cut_color)
         self._fmt_var.set(c.output_format)
+        self._comp_var.set(PDF_COMP_LABELS[PDF_COMP_KEYS.index(c.pdf_compression)])
+        self._q_var.set(str(c.jpeg_quality))
+        self._sync_output_controls()
         self._pfx_var.set(c.output_prefix); self._sfx_var.set(c.output_suffix)
         self._dir_var.set(c.output_dir); self._dir2_var.set(c.output_dir2)
         self._dir2_on_var.set(c.output_dir2_on)
@@ -1621,6 +1855,10 @@ class ConfigPanel(ctk.CTkFrame):
         cw_px, ch_px = engine.cell_px()
         self._cell_var.set(
             f"Célula: {cw_mm:.1f} × {ch_mm:.1f} mm  ({cw_px} × {ch_px} px @ {self.cfg.dpi} DPI)")
+
+        sw, sh, mb_raw = engine.sheet_info()
+        self._sheet_var.set(
+            f"Folha: {sw} × {sh} px · {mb_raw:.1f} MB bruto".replace(".", ","))
 
         q = engine.quality_report()
         if q["level"] == "none":
@@ -2025,6 +2263,8 @@ class PrintImposerApp(ctk.CTk):
             f"{APP_NAME} v{VERSION}\n"
             "Imposição de páginas para impressão.\n\n"
             f"SVG: {svg}\n"
+            f"Formatos extras: AVIF {'sim' if AVIF_OK else 'não'} · "
+            f"HEIC {'sim' if HEIF_OK else 'não'}\n"
             f"Configuração: {SettingsStore.SETTINGS}")
 
     def _show_shortcut_dialog(self):

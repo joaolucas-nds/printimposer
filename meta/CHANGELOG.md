@@ -4,7 +4,28 @@
 > **Cresce**: entradas novas no topo. Registra só o que foi de fato concluído/entregue.
 
 ## [Não lançado]
+- (nada pendente.)
+
+---
+
+## [1.3.0] — 2026-11-03
+Fase F4, etapa 1 (SPEC-F4-etapa1, DEC-014). Implementada pelo Code (wo0005); a conferência do PDF sem perda num leitor de PDF está com o dono.
+
+### Adicionado
+- Escritor de PDF próprio (`write_pdf`, só biblioteca padrão): embute o fluxo Deflate do PNG da folha (`/FlateDecode`, `/Predictor 15`) — PDF **sem perda** por construção. Modo JPEG embute os bytes do JPEG na qualidade escolhida (`/DCTDecode`).
+- Seção Saída: «Compressão» (PDF: Sem perda · JPEG) e «Qualidade» (50–100, para JPEG e PDF-JPEG); campos `pdf_compression` e `jpeg_quality` no config e nos presets.
+- Espaçamento independente: «Entre colunas (mm)» e «Entre linhas (mm)» (`margin_between_x_mm`, `margin_between_y_mm`); as linhas de corte acompanham cada eixo.
+- Rodapé: linha «Folha: L × A px · N MB bruto».
+- Entrada AVIF (quando o Pillow lê) e HEIC/HEIF (quando o `pillow-heif` está instalado); `Ajuda › Sobre` mostra «Formatos extras».
+- 22 testes headless (63 → 85): estrutura do PDF, `IDAT` byte a byte, `xref`, qualidade, espaçamento X/Y, compatibilidade com a 1.2, AVIF/HEIC.
+
+### Modificado
+- `margin_between_mm` virou `margin_between_x_mm` + `margin_between_y_mm`; config e presets da 1.2 carregam com X = Y = valor antigo.
+- Linhas do rodapé com altura fixa menor para caberem as quatro dentro dos 84 px.
+- `VERSION` para 1.3.0.
+
 ### Corrigido
+- PDF saía JPEG por dentro sem o usuário escolher (DEC-014; substitui a DEC-006).
 - Rótulo do segundo destino de saída cortado a 1366×768 (agora «Salvar cópia em outro destino»).
 
 ### Documentação

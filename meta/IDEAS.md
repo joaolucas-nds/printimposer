@@ -21,13 +21,13 @@ Em vez de o script desenhar marcas, já desenhar a borda fina no frame. Já é p
 Ajustar a proporção horizontal/vertical dentro do slot, além de fit/fill/stretch. Investigar se agrega sobre os três modos ou vira opção avançada.
 
 ### 2026-06 — Níveis de qualidade/compressão configuráveis
-Escolher o grau de compressão da saída (lossless × JPEG com qualidade). Ver HISTORY §2. **F3.**
+Escolher o grau de compressão da saída (lossless × JPEG com qualidade). Ver HISTORY §2. **F3.** **Entra na 1.3.0 (F4 etapa 1):** medido em 03/11 que o PDF de saída já era JPEG por dentro; PDF passa a ser sem perda por padrão (DEC-014).
 
 ### 2026-06 — Margem do centro vs. margem das bordas (e encolher a imagem para criar folga)
 Controle separado: aumentar a margem entre imagens OU as bordas externas, encolhendo a imagem proporcionalmente para criar a folga.
 
 ### 2026-06 — Margem por eixo (só horizontal ou só vertical)
-Espaçamento independente em X e em Y, em vez de um valor único "entre imagens".
+Espaçamento independente em X e em Y, em vez de um valor único "entre imagens". **Entra na 1.3.0 (F4 etapa 1).**
 
 ### 2026-06 — Imprimir direto, sem salvar arquivo
 Mandar para a impressora sem arquivo intermediário. No Windows passa por API de impressão/spooler. Avaliar viabilidade.
@@ -70,7 +70,7 @@ O teto de 12×12 impede o extremo, mas 10×10 num A4 dá células de ~20 mm: tec
 O Figma exporta PDF. PDF de entrada tem o mesmo ganho do SVG (rasterizar na resolução exata da célula, zero upscale) e é o degrau natural para a imposição vetorial. Tratar SVG e PDF como a mesma família de entrada.
 
 ### 2026-07-18 — Formatos de entrada extras de baixo custo
-`pillow-heif` (HEIC/AVIF, fotos de celular) e GIF/ICO já suportados pelo Pillow. Custo quase zero, cobre "arrastei o que tinha na pasta".
+`pillow-heif` (HEIC/AVIF, fotos de celular) e GIF/ICO já suportados pelo Pillow. Custo quase zero, cobre "arrastei o que tinha na pasta". **Medido em 03/11: o Pillow 12.2 já lê AVIF sozinho; HEIC segue via `pillow-heif` (opcional). Entra na 1.3.0.**
 
 ### 2026-07-18 — Barra de estado com o "custo" da folha
 Mostrar, ao vivo: tamanho final em px, MB estimados e um selo verde/amarelo/vermelho de qualidade. Transforma DPI e upscale em algo visível antes de gerar.

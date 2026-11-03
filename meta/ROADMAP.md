@@ -48,6 +48,7 @@
 ## 🟡 F4 — Qualidade profissional *(próxima — ordem interna não decidida)*
 **Objetivo:** aproximar a saída do padrão de gráfica e acabar com a perda de qualidade na origem.
 **Critério de conclusão:** PDF entra como fonte vetorial; marcas de canto e sangria disponíveis; compressão escolhível.
+**Ordem (escada C — `meta/analises/261103-ANALISE-ordem-f4.md`, aprovada em 03/11):** 1) **1.3.0** — PDF sem perda, compressão escolhível, espaçamento X/Y, tamanho da folha no rodapé, HEIC/AVIF (`meta/specs/261103-SPEC-F4-etapa1.md`); 2) **1.4.0** — entrada PDF via `pypdfium2`; 3) **portão** — imposição vetorial: sim, F5 ou descartar, decidido com sonda própria (as folhas vão para casa e para gráfica); 4) **1.5.0** — marcas de canto + sangria, no pipeline que o portão escolher.
 - ✅ ~~Entrada SVG~~ — antecipada e entregue na 1.1.0.
 - Entrada PDF (mesma família do SVG; é o que o Figma exporta em vetor).
 - Formatos extras de baixo custo: HEIC/AVIF via `pillow-heif`.

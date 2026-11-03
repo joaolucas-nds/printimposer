@@ -113,7 +113,7 @@ v1 desenha linhas contínuas entre colunas e linhas, atravessando a folha (sóli
 ---
 
 ## DEC-006 — Saída PDF por rasterização no DPI configurado
-**Data:** 2026-06-02 · **Status:** aceita
+**Data:** 2026-06-02 · **Status:** substituída por DEC-014
 
 ### Contexto
 Era preciso um formato "manda pra gráfica / imprime direto".
@@ -334,3 +334,24 @@ O chat grava `.claude/settings.json` e `.claude/skills/*` direto no lugar defini
 ### Consequências
 - A barreira de autoconcessão continua: quem grava a permissão é o chat, quem a usa é o Code.
 - Se a ponte deixar de gravar em `.claude/` (outra máquina, outra versão do app), volta a regra do kit. O caso está em «Técnicas específicas» do CEREBRO.
+
+---
+
+## DEC-014 — PDF por escritor próprio, sem perda por padrão (fluxo do PNG embutido)
+**Data:** 2026-11-03 · **Status:** aceita · *(substitui DEC-006)*
+
+### Contexto
+Medido em 2026-11-03: o PDF gerado por `Image.save(..., "PDF")` tinha `/DCTDecode` = 1 e `/FlateDecode` = 0 numa folha A4 2×2 a 300 DPI. O Pillow grava imagem RGB em PDF sempre como JPEG (`PdfImagePlugin.py` do Pillow 12.2.0, linhas 118–121; documentação: «L, RGB and CMYK mode images use JPEG encoding») e não oferece `quality` nem caminho sem perda. O formato recomendado «para gráfica» perdia qualidade sem o usuário escolher. O dono decidiu: PDF sem perda por padrão (análise `261103-ANALISE-ordem-f4`).
+
+### Decisão
+O PDF passa a ser escrito por uma função própria, só com a biblioteca padrão. Para cada folha, a página é salva como PNG em memória e os dados dos blocos `IDAT` são embutidos como imagem do PDF com `/FlateDecode` e `/Predictor 15` — sem recomprimir, portanto **sem perda por construção**. O modo JPEG do PDF embute os bytes de `save(..., "JPEG", quality=q)` com `/DCTDecode`, com a qualidade escolhida pelo usuário.
+
+### Alternativas consideradas
+- **`Image.save(..., "PDF")` (DEC-006)** — não tem caminho sem perda para RGB.
+- **`img2pdf`** — faz exatamente isso, mas depende do `pikepdf` (C++) e é LGPL-3: duas dependências novas para o formato **padrão**, que pela regra do projeto não pode depender de extra opcional.
+- **`reportlab` / `pypdf`** — servem, mas trazem dependência para algo que cabe em ~100 linhas de stdlib; o `pypdf` volta a ser avaliado no portão da imposição vetorial (F4, etapa 3).
+
+### Consequências
+- PDF sem perda fica do tamanho do PNG (maior que o JPEG de antes — medido numa folha sintética: PNG 11,3 MB × PDF-JPEG 3,2 MB); o modo JPEG continua disponível para arquivo menor.
+- O projeto passa a manter um escritor de PDF mínimo: estrutura (catálogo, páginas, `xref`) coberta por testes headless, e equivalência de pixels conferida por sonda com `pypdfium2` fora do Python do dono.
+- Se a imposição vetorial for aprovada no portão, este escritor é substituído pelo pipeline vetorial; até lá, é o único caminho de PDF.

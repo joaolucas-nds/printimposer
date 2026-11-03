@@ -19,6 +19,9 @@ build/
 dist/
 *.spec
 
+# Permissoes locais do Claude Code: sao da maquina, nao do projeto (o settings.json versionado e o contrato)
+.claude/settings.local.json
+
 # Saidas e dados locais da ferramenta
 outputs/
 backups/

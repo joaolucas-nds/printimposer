@@ -1,8 +1,24 @@
 # .flatdropignore — enxuga o que sobe ao Projeto do Claude (tudo segue versionado no git).
 # Sintaxe .gitignore; salvo na raiz; tem a palavra final sobre o .gitignore.
-
-# Logs de sessao: o "agora" fica no meta/STATUS.md; o diario nao precisa ir ao mount.
-logs/
-
+# Canal de RESERVA: com a pasta vinculada, o chat le o disco direto e este arquivo nao entra em jogo.
+#
+# COMO ESTE ARQUIVO E ORGANIZADO:
+# - Explicacao e comentario ficam AQUI EM CIMA, fora do bloco. Dentro do bloco eles somem:
+#   o editor do FlatDrop reescreve o bloco inteiro a cada salvamento.
+# - REGRA (o que some do mount) vai DENTRO do bloco do editor, delimitado no fim do arquivo.
+# - NADA depois da linha que FECHA o bloco: vale a ULTIMA regra que casa.
+# - NAO reproduza as linhas marcadoras aqui em cima: o editor as procura por substring.
+#
+# FORMA: use "pasta/*" (o CONTEUDO), nunca "pasta/" (a PASTA): a ferramenta poda o diretorio
+# casado antes de descer, e um "!" la dentro nunca chega a ser avaliado.
+#
+# Logs do dia: o "agora" fica no meta/STATUS.md; o diario nao precisa ir ao mount.
+# WOs aplicadas: o desfecho vive em DECISIONS/CHANGELOG; o corpo pesa. O modelo sempre sobe.
 # Saidas geradas pela ferramenta: nao sao contexto.
-outputs/
+
+# >>> flatdrop-editor
+logs/*
+meta/workorders/*
+!meta/workorders/_TEMPLATE.md
+outputs/*
+# <<<

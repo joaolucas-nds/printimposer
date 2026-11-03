@@ -1,24 +1,20 @@
 {
   "permissions": {
     "allow": [
+      "Read", "Write", "Edit", "Grep", "Glob",
       "Bash(python tests/test_engine.py)",
       "Bash(python print_imposer.py)",
-      "Bash(git status)",
-      "Bash(git diff:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git log:*)",
-      "Read(./**)",
-      "Edit(print_imposer.py)",
-      "Edit(tests/**)",
-      "Edit(meta/STATUS.md)",
-      "Edit(meta/DECISIONS.md)"
+      "Bash(git status:*)", "Bash(git diff:*)", "Bash(git log:*)", "Bash(git ls-files:*)",
+      "Bash(git add:*)", "Bash(git rm:*)", "Bash(git mv:*)", "Bash(git commit:*)", "Bash(git push:*)",
+      "Bash(date:*)", "Bash(sha1sum:*)", "Bash(grep:*)", "Bash(wc:*)",
+      "Bash(mkdir:*)", "Bash(cp:*)", "Bash(mv:*)"
     ],
     "deny": [
-      "Edit(meta/CEREBRO.md)",
-      "Edit(INSTRUCOES-DO-PROJETO.md)",
-      "Edit(meta/LOG-TEMPLATE.md)",
-      "Bash(git push:*)"
-    ]
+      "Edit(meta/CEREBRO.md)", "Write(meta/CEREBRO.md)",
+      "Edit(INSTRUCOES-DO-PROJETO.md)", "Write(INSTRUCOES-DO-PROJETO.md)",
+      "Edit(meta/LOG-TEMPLATE.md)", "Write(meta/LOG-TEMPLATE.md)",
+      "Bash(rm -rf:*)"
+    ],
+    "additionalDirectories": ["../"]
   }
 }

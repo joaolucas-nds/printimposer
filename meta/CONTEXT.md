@@ -1,6 +1,6 @@
 # CONTEXT.md — PrintImposer
 
-> Arquivo **estável**. O assistente lê no início de cada sessão para se ambientar.
+> Arquivo **estável**. O assistente lê ao abrir cada conversa para se ambientar.
 > Muda pouco: só em alteração estrutural (stack, arquitetura, escopo, nova armadilha descoberta).
 > Mantenha enxuto — descreve o que o projeto É, não o que está acontecendo agora (isso é o STATUS).
 
@@ -15,17 +15,19 @@ PrintImposer é uma ferramenta desktop de **imposição de páginas** para impre
 - **Imagem/composição:** Pillow (PIL) — resize LANCZOS, composição RGBA, export PDF/PNG/JPEG/TIFF
 - **Concorrência:** `threading` (geração e preview fora da UI thread)
 - **Distribuição:** script único, rodado com `python print_imposer.py`
-- **Testes:** `tests/test_engine.py` — 48 testes headless via stub de tkinter. **Não cobrem a GUI**: janela, divisórias e DPI só se validam abrindo o app (ver CLAUDE.md §Smoke test).
+- **Testes:** `tests/test_engine.py` — suíte headless via stub de tkinter. **Não cobrem a GUI**: janela, divisórias e DPI só se validam abrindo o app (ver CLAUDE.md §Smoke test).
 - **SVG (opcional):** `cairosvg` ou `svglib`; ausente, o `.svg` some da lista de formatos.
 
 ## Estrutura do Projeto
 ```
 printimposer/
 ├── print_imposer.py       # TODO o app em um arquivo (~1960 linhas)
-├── tests/test_engine.py   # 48 testes headless (engine + checagens AST do fonte)
-├── CLAUDE.md              # contrato da raia de validação (Claude Code)
-├── .claude/               # settings.json + comandos /smoke e /wrap
+├── tests/test_engine.py   # suíte headless (engine + checagens AST do fonte)
+├── CLAUDE.md              # guia da raia de execução (Claude Code)
+├── .claude/               # settings.json + skills /apply-wo /smoke /wrap /sondar
 ├── meta/                  # documentação viva (KCM)
+│   ├── specs/             # spec de feature: o QUÊ construir (chat escreve)
+│   └── workorders/        # WOs: COMO aplicar (chat escreve, Code aplica)
 └── README.md              # documentação de uso
 ```
 O arquivo único está organizado em camadas internas (ver Arquitetura).
@@ -64,8 +66,8 @@ A relação **qualidade × DPI**: a folha é rasterizada no DPI escolhido. Se a 
 - **CustomTkinter para a UI** — visual moderno com baixo custo. Ver DEC-002.
 - **Arquivo único** — simplicidade de distribuição. Ver DEC-003.
 - **Linhas de corte atravessam a folha (v1)** — marcas de canto profissionais ficaram para depois. Ver DEC-005.
-- **Grade de layout será livre (`cols × rows`), não uma lista cadastrada** — decidido, a implementar na F2. Ver DEC-009.
-- **Edição de código sai como instrução ASU**, não arquivo inteiro; a raia Claude Code foi dispensada. Ver DEC-007.
+- **Grade de layout livre (`cols × rows`), não uma lista cadastrada** — implementada na 1.1.0. Ver DEC-009.
+- **O chat planeja, o Claude Code implementa** — spec, análise e WO no chat; código, testes, smoke, commit e push no Code. Ver DEC-012 (substitui DEC-007 e DEC-010).
 
 ## Armadilhas Conhecidas (o que NÃO fazer)
 > Cada armadilha já custou tempo uma vez. O que parece certo → por que morde → o certo.
@@ -76,10 +78,17 @@ A relação **qualidade × DPI**: a folha é rasterizada no DPI escolhido. Se a 
 4. **Mutar `cfg` dentro do engine, mesmo restaurando depois** — preview e geração rodam em **threads distintas sobre o mesmo `LayoutConfig`**; restaurar num `finally` conserta o caso sequencial e esconde o concorrente (a folha saía em 72 DPI sem aviso). → **Passe o valor por parâmetro**, não mute estado compartilhado. Ver FIX-004.
 5. **Usar `winfo_screenheight()` para dimensionar a janela** — devolve a tela **física**; a barra de tarefas come o rodapé e o botão de ação some. → Use a **área útil** (`SPI_GETWORKAREA` no Windows). Ver FIX-005.
 6. **Confiar que suíte verde = app funcional** — os 40 testes da 1.1.0 passavam com o app sem abrir, porque o stub de `tkinter` não reproduz o ambiente real. → Mudança de GUI **exige smoke test** (CLAUDE.md); e, quando dá, guarde a lição com uma checagem AST do código-fonte.
-7. **Mexer no DPI dentro de `compose_page` sem restaurar** — o método troca `cfg.dpi` temporariamente para preview; sempre restaure no `finally`/fim. Já está tratado; não remova a restauração.
+7. **Reintroduzir o `cfg.dpi` temporário em `compose_page`** — a versão antiga trocava o DPI para o preview e restaurava no `finally`; parecia seguro e causou a FIX-004. Desde então o DPI desce por parâmetro (`override_dpi`) e não há nada a restaurar. → Não volte a mutar; ver armadilha 4.
 8. **Assumir que dependência opcional importada = dependência funcional** — `svglib` importa sem erro mas só desenha com `rlPyCairo`/`_rl_renderPM`. → **Sonde a capacidade com um render real**, não o import, e guarde a referência do módulo. Ver FIX-002.
 9. **Geometria de janela fixa sem clamp e sem DPI awareness** — `geometry("1100x780")` parece inofensivo, mas ignora o tamanho real do monitor e, sem `SetProcessDpiAwareness`, o Windows escala por bitmap em telas com zoom → janela cortada e texto borrado. → Centralize com clamp e declare DPI awareness antes de criar a janela. Ver HISTORY §6.
 10. **Linhas de corte finas em saída lossless** — inflam o arquivo (detalhe de alta frequência). → Para arquivos enxutos, prefira marcas de canto (futuro) ou borda feita no Figma. Ver DEC-005 e ROADMAP F3.
+
+## 📁 Arquivos Críticos (não mexer sem contexto)
+> Conhecimento **estável**, não estado do agora — por isso vive aqui, e não no STATUS.
+- `print_imposer.py` — app inteiro. Antes de tocar na composição, ler «Como a imposição funciona» acima. `compose_page` **não muta `cfg`**: preview e geração compartilham o `LayoutConfig` entre threads (FIX-004).
+- `tests/test_engine.py` — a única rede antes do smoke. Três testes inspecionam o **código-fonte** por AST (colisão com nomes do Tkinter, contrato da área útil), porque o stub headless não reproduz esses bugs. Rodar antes de qualquer commit de código.
+- `CLAUDE.md` / `.claude/` — contrato da raia de execução (DEC-012). O `settings.json` proíbe de propósito o Code editar CEREBRO, Instruções e LOG-TEMPLATE, e o chat não grava em `.claude/`: mudança de permissão chega como arquivo na pasta-pai e o dono copia.
+- `meta/CEREBRO.md` — alinhado ao kit v1.133.0; o que é só deste projeto vai na seção «Técnicas específicas», que nenhum update sobrescreve.
 
 ## Contexto de Produto
 - **Usuário-alvo:** quem produz cards/artes em lote no Figma e imprime em casa ou manda para gráfica.

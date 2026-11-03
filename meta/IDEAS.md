@@ -32,6 +32,9 @@ Espaçamento independente em X e em Y, em vez de um valor único "entre imagens"
 ### 2026-06 — Imprimir direto, sem salvar arquivo
 Mandar para a impressora sem arquivo intermediário. No Windows passa por API de impressão/spooler. Avaliar viabilidade.
 
+### 2026-07-23 — `.bat` gerado na pasta-pai do projeto, não na Área de Trabalho
+Nota do dono: «o .bat é para ser gerado em uma pasta "anterior" a pasta raíz do projeto, entende? E não na área de trabalho, assim fica mais fácil para mim, organizar.» Vira requisito do diálogo do `.bat` na F3 (SPEC-F3 §6). **F3.**
+
 ---
 
 ## 🤖 Ideias Ativas — Assistente
@@ -106,8 +109,13 @@ Executável Windows para quem não tem Python. **F4.**
 - **2026-07-18 — `DECISOES.md` × `DECISIONS.md` no CEREBRO.** A raia Code do kit referenciava `meta/DECISOES.md` em 3 pontos, enquanto o arquivo real é `DECISIONS.md`. Inconsistência do próprio template; resolvida ao remover a seção.
 - **2026-07-18 — Seções «Feedback para o Kit» e «Feedback para o ASU» não estão no template do IDEAS.** O CEREBRO exige as duas, mas o `IDEAS__template-update.md` não as traz — quem gera o IDEAS do zero pelo template nasce sem elas (foi o que aconteceu aqui). Sugestão: incluí-las no molde.
 - **2026-07-18 — Instruções do template chegam em 6.892 de 6.900 caracteres.** Zero folga para especializar. Enxugadas para 5.350 nesta sessão cortando descrições que já vivem no CEREBRO. Sugestão: o molde já entregar as descrições curtas.
+- **2026-11-03 — CEREBRO de fusão sem nenhuma linha própria.** Das 182 linhas não vazias do CEREBRO vivo (v1.73), as 46 ausentes do template v1.133 eram todas texto antigo do kit, a seção ASU e o carimbo — a «fusão» virou adoção. Sugestão: o manifesto mandar medir isto PRIMEIRO (linhas do vivo ausentes do template), porque decide se o merge é fusão ou troca e poupa a comparação bloco a bloco.
+- **2026-11-03 — Revogação pelo fato achou o que o termo não acha.** A linha revogada v1.104 («não empurrar») vivia também no `.claude/settings.json` (deny `git push`), que nenhum `grep` pelo texto da tabela alcança. Sugestão: a tabela de revogadas citar também a forma em config, não só em prosa.
+- **2026-11-03 — `IDEAS__template-update` ainda traz «Feedback para o ASU» com o pacote declarando `ASU nao`.** Inconsistência do molde: a seção devia sair junto do modo.
+- **2026-11-03 — Instruções do painel × arquivo do repo divergiram em silêncio.** O painel do Projeto ficou com a versão genérica enquanto o arquivo do repo evoluía (ASU, nome de download). A regra «a fonte é o arquivo do repositório» só chegou na v1.133; antes dela não havia quem notasse.
 
 ## 🔩 Feedback para o ASU
+> **Congelado em 2026-11-03:** o ASU foi aposentado (DEC-012). As entradas abaixo ficam como histórico; nada novo entra aqui.
 - **2026-07-22 — Transferência de conversa via ASU funciona, com uma ressalva.** O prompt de handoff do KCM manda atualizar os `.md` por instrução ASU (não devolver arquivo inteiro). Respeitado nesta transferência: as mudanças eram pequenas e pontuais (marcar o ASU0003 como aplicado, apontar o brief), caso ideal para `replace_line_pattern`/`replace_context_block`. Ressalva honesta: quando a atualização de fim de sessão reescreve **seções inteiras** de um doc rolante (STATUS, IDEAS), o ASU perde para o arquivo inteiro — múltiplas âncoras num texto que mudou muito é frágil. Regra prática: mudança pontual no `.md` → ASU; reescrita de seção → arquivo inteiro. O KCM poderia distinguir os dois casos no prompt de handoff.
 > Limitações e pedidos de melhoria da ferramenta, observados em uso.
 
@@ -117,6 +125,12 @@ Executável Windows para quem não tem Python. **F4.**
 - **2026-07-22 — Âncora de `replace_context_block` precisa de duas linhas às vezes.** `        cfg = self.cfg` sozinho aparece 2× no arquivo; `        cfg = self.cfg\n        cols, rows = self._grid()` é único. Vale o guia sugerir explicitamente âncoras multi-linha quando a linha isolada é genérica.
 - **2026-07-19 — Primeira instrução ASU do projeto: `260719-asu0001.yaml`.** 12 modificações em 2 arquivos, todas `replace_method` / `insert_before_pattern` / `replace_line_pattern`. Observações de uso: (a) `replace_method` foi a estratégia mais confortável — dispensa âncora literal, então não há risco de errar indentação; (b) a única inserção precisou de `pattern` com regex escapado (`^    def _setup_geometry\(self\):`), e foi tranquilo; (c) **antes de emitir, simulei a aplicação** e comparei com o arquivo já testado — o resultado bateu byte a byte. Recomendo que isso vire hábito: instrução ASU gerada às cegas é aposta.
 - **2026-07-19 — A F2 não usou ASU, e o motivo vale registrar.** A entrega tocou constantes, `LayoutConfig`, o engine, três painéis e o `main()`. Um patch com 15+ âncoras num arquivo em reestruturação é frágil e não dá para verificar sem aplicar. Foi entregue arquivo inteiro, como a DEC-007 prevê para reescrita profunda. **O ASU passa a ser o caminho natural agora**: com a 1.1.0 estabilizada, os próximos ajustes são localizados (ex.: o refresh do menu de presets) — exatamente o caso dele.
+
+---
+
+## 🛌 Adiadas
+> Decisão consciente de não fazer agora. Cada item com **o gatilho que a traz de volta**: ideia adiada sem gatilho é ideia perdida.
+- **Corrigir a numeração duplicada do HISTORY (seções 4 e 5 aparecem duas vezes)** — adiada porque renumerar quebra ponteiros: o código cita HISTORY §6 e §8, a SPEC-F3 e o ROADMAP citam §9 — **volta quando** o HISTORY ganhar a próxima seção (aí resolve-se com sufixo nas duplicadas, sem renumerar as citadas).
 
 ---
 
@@ -142,5 +156,5 @@ Executável Windows para quem não tem Python. **F4.**
 ## 🚫 Descartadas
 > Ideia avaliada e recusada. O motivo evita reabrir a discussão depois.
 - **SVG como formato de saída** — com arte raster, o SVG só embutiria os bitmaps: nenhum ganho de qualidade ou tamanho. O caminho para qualidade vetorial é a entrada PDF (F3). *(Entrada SVG continua ativa.)*
-- **Raia de desenvolvimento no Claude Code** — descartada como modo padrão em 2026-07-18 (DEC-007): o projeto é um arquivo único, sem build e sem suíte, onde a cerimônia do Code (CLAUDE.md, `.claude/`, specs) custa mais do que rende. Substituída pelo ASU. *Gatilho de reabertura registrado na DEC-007.*
+- **Raia de desenvolvimento no Claude Code** — descartada como modo padrão em 2026-07-18 (DEC-007): o projeto é um arquivo único, sem build e sem suíte, onde a cerimônia do Code (CLAUDE.md, `.claude/`, specs) custa mais do que rende. Substituída pelo ASU. *Gatilho de reabertura registrado na DEC-007.* **Reaberta e adotada em 2026-11-03 — ver DEC-012:** o gatilho disparou na F2 (FIX-003..005) e o kit v1.133 ligou o modo Code.
 - **Cadastro de layouts em lista JSON editável pela UI** — substituído pela grade livre `cols × rows` + presets nomeados, que resolve o mesmo problema sem construir um editor de lista. *(A persistência em JSON continua — o que caiu foi a lista de layouts como estrutura.)*

@@ -132,7 +132,7 @@ Gerar PDF a partir das imagens compostas via `PIL.Image.save(..., "PDF", resolut
 ---
 
 ## DEC-007 — Modo ASU no lugar da raia de desenvolvimento no Claude Code
-**Data:** 2026-07-18 · **Status:** aceita
+**Data:** 2026-07-18 · **Status:** substituída por DEC-012
 
 ### Contexto
 O CEREBRO trazia uma raia "chat ↔ Claude Code" (specs em `meta/specs/`, `CLAUDE.md`, `.claude/`, build e commit pelo agente). O template-update v1.73.0 chegou sem essa raia e com a seção "Saída de código via ASU (patch)". Era preciso escolher um método para editar arquivos existentes sem reescrevê-los inteiros.
@@ -193,7 +193,7 @@ Expor **dois spinners `colunas × linhas`** na UI, permitindo qualquer grade sem
 ---
 
 ## DEC-010 — Claude Code como raia de validação, não de desenvolvimento
-**Data:** 2026-07-19 · **Status:** aceita · *(refina a DEC-007, não a revoga)*
+**Data:** 2026-07-19 · **Status:** substituída por DEC-012 · *(refinava a DEC-007, não a revogava)*
 
 ### Contexto
 A DEC-007 dispensou o Claude Code como modo de desenvolvimento e registrou um gatilho de reabertura: "se aparecerem 2+ bugs de runtime de GUI que o chat não pegou". A F2 mudou justamente a geometria da janela, o DPI awareness e as divisórias — três coisas que **só se validam com a janela aberta** e que o chat estruturalmente não executa.
@@ -214,7 +214,7 @@ Montar `CLAUDE.md` e `.claude/` para o Claude Code atuar como **raia de execuç�
 ---
 
 ## FIX-001 — `tk.PanedWindow` não adota `CTkScrollableFrame` como filho
-**Data:** 2026-07-18 *(diagnóstico/correção)* · *(bug presente desde o v1.0.0)*
+**Data:** 2026-07-18 *(diagnóstico/correção)* · *(bug presente desde o v1.0.0)* · **Status:** resolvida
 
 - **Sintoma:** ao abrir o app no Windows (Python 3.14), crash imediato:
   `_tkinter.TclError: can't add .!panedwindow.!panedwindow.!ctkframe.!canvas.!ctkscrollableframe to .!panedwindow.!panedwindow`.
@@ -227,7 +227,7 @@ Montar `CLAUDE.md` e `.claude/` para o Claude Code atuar como **raia de execuç�
 ---
 
 ## FIX-002 — Detecção de dependência opcional por `import` não prova capacidade
-**Data:** 2026-07-19 *(capturado em desenvolvimento, nunca chegou a ser publicado)*
+**Data:** 2026-07-19 *(capturado em desenvolvimento, nunca chegou a ser publicado)* · **Status:** resolvida
 
 - **Sintoma:** com `svglib` instalado, `SVG_BACKEND` era definido e `.svg` entrava na lista de formatos aceitos — mas gerar a folha estourava `RenderPMError: cannot import desired renderPM backend rlPyCairo`. O usuário só descobriria na hora de imprimir.
 - **Causa raiz:** a sondagem testava só `import svglib`. Acontece que `svglib` **analisa** SVG em Python puro, mas **desenhar** depende do `renderPM` do reportlab, que por sua vez exige `rlPyCairo` ou a extensão C `_rl_renderPM`. Importar a biblioteca não prova que ela consegue produzir um pixel.
@@ -263,7 +263,7 @@ Três zonas: **fixa no topo** (Grade + mini-grid), **accordion no meio** (Papel,
 ---
 
 ## FIX-003 — Sobrescrever `_w` colide com o Tkinter e impede o app de abrir
-**Data:** 2026-07-19 · **Gravidade: bloqueador** — a 1.1.0 não abria.
+**Data:** 2026-07-19 · **Gravidade: bloqueador** — a 1.1.0 não abria. · **Status:** resolvida
 
 - **Sintoma:** `python print_imposer.py` morria na construção da UI com `_tkinter.TclError: invalid command name "70"`, no `GridPreview.draw` → `self.delete("all")`.
 - **Causa raiz:** `GridPreview.__init__` fazia `self._w, self._h = w, h` para guardar as dimensões da caixa. Só que em `tkinter.Misc`, **`_w` é o pathname Tcl do widget** (`'.!canvas'`) — é o nome pelo qual o Tk conhece o objeto. Sobrescrevendo com `70`, toda chamada passou a montar o comando `70 delete`, e o Tcl respondeu que não existe comando chamado "70". Atingia 3 linhas.
@@ -275,7 +275,7 @@ Três zonas: **fixa no topo** (Grade + mini-grid), **accordion no meio** (Papel,
 ---
 
 ## FIX-004 — Corrida de DPI entre a thread de preview e a de geração
-**Data:** 2026-07-19 · **Gravidade: alta** — saída silenciosamente errada.
+**Data:** 2026-07-19 · **Gravidade: alta** — saída silenciosamente errada. · **Status:** resolvida
 
 - **Sintoma:** gerar logo depois de mexer numa opção produzia a folha em **72 DPI** em vez do DPI configurado, sem aviso nenhum. Reproduzido: preview em voo → 595×842 px; preview assentado → 1240×1754 px, para o mesmo A4 a 150 DPI.
 - **Causa raiz:** `compose_page` mutava `cfg.dpi`, compunha, e restaurava num `finally`. Correto para uso **sequencial** — mas preview e geração rodam em **threads distintas sobre o mesmo `LayoutConfig`**. Enquanto a thread do preview segurava `cfg.dpi = 72`, a thread de geração lia esse valor e compunha a folha inteira em 72 DPI. O `finally` restaurava depois, tarde demais.
@@ -286,10 +286,32 @@ Três zonas: **fixa no topo** (Grade + mini-grid), **accordion no meio** (Papel,
 ---
 
 ## FIX-005 — Geometria usava a tela física, não a área útil
-**Data:** 2026-07-19 · **Gravidade: média** — parte da UI inacessível.
+**Data:** 2026-07-19 · **Gravidade: média** — parte da UI inacessível. · **Status:** resolvida
 
 - **Sintoma:** em tela de 1366×768, a janela abria com base em y=737 contra uma área útil de 720 px: a barra de ação inferior — inclusive o botão **"Gerar Arquivos"** — ficava sob a barra de tarefas.
 - **Causa raiz:** `_setup_geometry` calculava o clamp com `winfo_screenheight()`, que devolve a **tela física**, ignorando a barra de tarefas e qualquer outra barra acoplada.
 - **Solução:** novo helper `_work_area()`, que no Windows consulta `SystemParametersInfoW(SPI_GETWORKAREA)` e devolve `(x, y, w, h)` da área realmente utilizável; fora do Windows (ou se a API falhar) desconta uma faixa de cortesia de 60 px. O posicionamento passou a ser relativo à origem da área útil, não a (0,0).
 - **Guarda de regressão:** `WorkAreaTests` verifica que `_setup_geometry` chama `_work_area()` e **não** usa `winfo_screenheight()` diretamente.
 - **Lição:** "caber na tela" e "caber na área utilizável" são coisas diferentes. Tela cheia de barras é o caso comum, não a exceção.
+
+---
+
+## DEC-012 — Claude Code implementa; o chat planeja com a pasta vinculada (ASU aposentado)
+**Data:** 2026-11-03 · **Status:** aceita · *(substitui DEC-007 e DEC-010)*
+
+### Contexto
+Duas mudanças chegaram juntas. O template-update KCM v1.133.0 veio com o modo Code ligado e o ASU desligado, e o chat passou a trabalhar com a pasta do projeto vinculada — lê e grava no disco. O gatilho de reabertura da DEC-007 («2+ bugs de runtime de GUI que o chat não pegou») já tinha disparado na F2: FIX-003, FIX-004 e FIX-005. E o ASU custou duas instruções defeituosas por semântica de indentação não documentada (ver «Feedback para o ASU» no IDEAS).
+
+### Decisão
+O **chat planeja**: spec, análise e WO; cura CEREBRO, CONTEXT, GLOSSARY, Instruções e LOG-TEMPLATE, gravando direto na pasta. O **Claude Code implementa**: escreve o código a partir da spec ou da WO, roda a suíte e a GUI, faz o smoke, edita STATUS, DECISIONS e CHANGELOG (e IDEAS por WO), commita e **empurra quando verde**. Edição de arquivo existente sai como **WO** em `meta/workorders/`, aplicada com `/apply-wo`. O ASU sai de cena.
+
+### Alternativas consideradas
+- **Manter ASU + Code validando (DEC-007/010)** — dois canais para editar código, e o do ASU com falhas medidas de indentação; quem escrevia não rodava o que escrevia.
+- **Chat escreve o código direto na pasta, Code só valida** — possível agora, mas mantém quem escreve longe de quem roda: o ciclo bug → traceback → correção passa por dois atores.
+- **Push só pelo dono** — a DEC-010 proibia; o kit mediu que o passo manual é o primeiro a ser pulado. O freio fica no vermelho: suíte falhou, âncora sumiu ou diff fora do previsto → sem commit, menu de opções.
+
+### Consequências
+- `.claude/commands/` migrou para `.claude/skills/` (`apply-wo`, `wrap`, `sondar`, `smoke`). O `settings.json` ganhou `Write`, `additionalDirectories: ["../"]` e `git push`; o deny de o Code editar CEREBRO, Instruções e LOG-TEMPLATE ficou.
+- Cada tarefa do Code grava relatório na pasta-pai (`AAMMDD-HHMM-code-printimposer-<ato>-<alvo>.txt`).
+- O guia do ASU foi para `zz_backups/`; as entradas «Feedback para o ASU» ficam no IDEAS como histórico.
+- A F3 (`meta/specs/SPEC-F3-UI.md`) passa a ser implementada pelo Code. O §12 da spec («entrega em arquivo inteiro») e a última consequência da DEC-011 («conforme DEC-007») ficam superados por esta decisão; o chat revisa a spec antes da WO da F3.

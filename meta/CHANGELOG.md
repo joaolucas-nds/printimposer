@@ -9,6 +9,31 @@
 
 ---
 
+## [1.2.0] — 2026-11-03
+Fase F3 (SPEC-F3-UI): painel de configuração reestruturado e menubar. Implementada pelo Code (DEC-012); a conferência visual do dono ainda está pendente.
+
+### Adicionado
+- Menubar `Arquivo · Opções · Ajuda` na topbar (botões + `tk.Menu.tk_popup` ancorado no botão), com `Ctrl+O`, `Ctrl+Shift+O` e `Ctrl+G` valendo com o foco em qualquer painel.
+- `CollapsibleSection` (accordion): cabeçalho focável por `Tab` e acionável por `Espaço`/`Enter`; fechar usa `grid_remove()`, então os campos mantêm o estado.
+- `sections_open` no `settings.json`: as seções abertas voltam ao reabrir o app. Arquivo da 1.1.x (sem a chave) cai no padrão, só `Saída` aberta.
+- Diálogo `Opções › Criar atalho…` que explica o `.bat` antes de gerar e mostra interpretador e script; o seletor abre na pasta-pai da raiz do projeto (pedido do dono, 2026-07-23).
+- `Ajuda › Guia rápido: Figma → impressão` (constante única `QUICK_GUIDE`) e `Ajuda › Sobre o PrintImposer`.
+- `Opções › Restaurar configurações padrão` (mantém as pastas de entrada e saída).
+- 15 testes headless (48 → 63): contrato do `sections_open`, rótulos e ligação dos menus, `initialdir` do atalho, `grid_remove` no accordion e teto da zona inferior.
+
+### Modificado
+- Painel central em três zonas: grade fixa no topo, accordion rolável (Papel, Ajuste, Margens, Corte, Saída; só Saída aberta por padrão) e resumo fixo embaixo (contador, célula e guarda de qualidade), com altura ≤ 84 px.
+- Presets viraram o submenu `Opções › Presets`, reconstruído a cada abertura.
+- `VERSION` para 1.2.0.
+
+### Corrigido
+- **Menu de presets não atualizava sem reiniciar:** o submenu é reconstruído a cada abertura, sem varrer a árvore de widgets.
+
+### Removido
+- Seções `Atalho` (`.bat`) e `Presets` do painel de configuração.
+
+---
+
 ## [1.1.1] — 2026-07-22
 Correções apontadas pelo primeiro smoke test da GUI (raia de validação, DEC-010).
 

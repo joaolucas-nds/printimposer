@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PrintImposer v1.1.0
+PrintImposer v1.2.0
 Ferramenta de Imposição de Páginas para Impressão em Massa
 
 Selecione imagens, configure o layout e gere PDFs/PNGs prontos para impressão.
@@ -14,6 +14,11 @@ Novidades da 1.1 (fase F2 do ROADMAP):
   - Entrada SVG (dependência opcional, antecipada da F3)
   - Guarda de qualidade: avisa quando a imagem-fonte é menor que a célula
   - Gerador de .bat para abrir a GUI sem console
+
+Novidades da 1.2 (fase F3 do ROADMAP, SPEC-F3-UI):
+  - Menubar Arquivo / Opções / Ajuda; presets e atalho .bat saíram do painel
+  - Painel de configuração em três zonas: grade fixa, accordion, resumo fixo
+  - Seções abertas/fechadas lembradas entre sessões (`sections_open`)
 """
 
 import os
@@ -92,7 +97,7 @@ SVG_BACKEND = _probe_svg_backend()
 # CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION  = "1.1.1"
+VERSION  = "1.2.0"
 APP_NAME = "PrintImposer"
 MM_TO_INCH = 1.0 / 25.4
 
@@ -141,6 +146,45 @@ OUT_FORMATS  = ["PNG", "PDF", "JPEG", "TIFF"]   # PNG primeiro: é o padrão ago
 # Limiares da guarda de qualidade (razão entre pixels da fonte e da célula).
 QUALITY_OK   = 1.00   # fonte >= célula: sem upscale
 QUALITY_WARN = 0.75   # abaixo disso a perda começa a aparecer na impressão
+
+# Seções do accordion: chave estável (persistida) → estado inicial. Só "saida"
+# nasce aberta: é a que muda a cada trabalho (SPEC-F3-UI §2 e §9).
+SECTION_DEFAULTS: Dict[str, bool] = {
+    "papel": False, "ajuste": False, "margens": False, "corte": False, "saida": True,
+}
+
+# Rótulos do menubar (SPEC-F3-UI §5). Uma fonte só: a montagem e os testes leem daqui.
+MENU_TITLES = ("Arquivo", "Opções", "Ajuda")
+MENU_LABELS: Dict[str, str] = {
+    "add_files":     "Adicionar arquivos…",
+    "add_folder":    "Adicionar pasta…",
+    "clear":         "Limpar lista",
+    "generate":      "Gerar arquivos",
+    "open_out":      "Abrir pasta de saída",
+    "quit":          "Sair",
+    "presets":       "Presets",
+    "save_preset":   "Salvar atual…",
+    "delete_preset": "Excluir…",
+    "make_bat":      "Criar atalho…",
+    "reset":         "Restaurar configurações padrão",
+    "guide":         "Guia rápido: Figma → impressão",
+    "about":         "Sobre o PrintImposer",
+}
+
+# Guia rápido (Ajuda). O README continua sendo a versão longa deste texto.
+QUICK_GUIDE = (
+    "1. No Figma\n"
+    "   Use frames A6 e exporte PNG com pelo menos 1240×1748 px\n"
+    "   (ou SVG, se o cabeçalho do app mostrar um back-end de SVG).\n"
+    "\n"
+    "2. No PrintImposer\n"
+    "   Adicione a pasta com as imagens, escolha a grade 2×2, confira o\n"
+    "   selo de qualidade no rodapé do painel e clique em «Gerar Arquivos».\n"
+    "\n"
+    "3. Na impressora\n"
+    "   Escolha «Tamanho real» / 100%. Nunca «ajustar à página»: isso\n"
+    "   reescala a folha e as linhas de corte deixam de bater."
+)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -207,6 +251,30 @@ class SettingsStore:
             return True
         except Exception:
             return False
+
+
+def normalize_sections_open(raw: Any) -> Dict[str, bool]:
+    """Estado do accordion a partir do que veio do settings.json.
+
+    Chave ausente cai no padrão; chave desconhecida e valor que não é booleano
+    são ignorados. Arquivo da 1.1.x (sem `sections_open`) devolve o padrão.
+    """
+    state = dict(SECTION_DEFAULTS)
+    if isinstance(raw, dict):
+        for key in SECTION_DEFAULTS:
+            if isinstance(raw.get(key), bool):
+                state[key] = raw[key]
+    return state
+
+
+def shortcut_initial_dir() -> str:
+    """Pasta onde o seletor do atalho .bat abre: a PAI da raiz do projeto.
+
+    O dono prefere o .bat fora da área de trabalho, numa pasta acima do projeto
+    (SPEC-F3-UI §6). Se ela não existir, cai para a home.
+    """
+    parent = Path(__file__).resolve().parent.parent
+    return str(parent if parent.is_dir() else Path.home())
 
 
 def default_output_dir() -> str:
@@ -1011,32 +1079,123 @@ class ImageListPanel(ctk.CTkFrame):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# WIDGET: SEÇÃO RECOLHÍVEL (accordion)
+# ══════════════════════════════════════════════════════════════════════════════
+
+class CollapsibleSection(ctk.CTkFrame):
+    """Cabeçalho clicável + corpo que some sem ser destruído.
+
+    Fechar usa `grid_remove()`: os widgets e o estado dos campos continuam
+    vivos. Todo atributo privado leva o prefixo `_cs_` — nomes como `_w`,
+    `master` e `tk` são do Tkinter e sobrescrevê-los quebra o app (FIX-003).
+    """
+
+    def __init__(self, master, title: str, key: str,
+                 expanded: bool = False, on_toggle=None, **kw):
+        super().__init__(master, fg_color="transparent", **kw)
+        self._cs_title    = title
+        self._cs_key      = key
+        self._cs_open     = bool(expanded)
+        self._cs_on_toggle = on_toggle
+        self.columnconfigure(0, weight=1)
+
+        self.header = ctk.CTkButton(
+            self, text="", anchor="w", height=30, corner_radius=6,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color=("gray78", "#232334"), hover_color=("gray70", "#2e2e44"),
+            text_color=("gray10", "gray90"), border_color="#5b8def",
+            command=self.toggle)
+        self.header.grid(row=0, column=0, sticky="ew")
+        self._cs_make_focusable()
+
+        self.body = ctk.CTkFrame(self, fg_color="transparent")
+        self.body.grid(row=1, column=0, sticky="ew", padx=(8, 4), pady=(4, 2))
+        self.body.columnconfigure(1, weight=1)
+        self._cs_apply()
+
+    def _cs_make_focusable(self):
+        """CTkButton não entra na ordem do Tab sozinho: liga o foco no canvas."""
+        try:
+            self.header._canvas.configure(takefocus=1)
+        except Exception:
+            pass   # sem foco por teclado, o clique continua funcionando
+        for seq in ("<space>", "<Return>"):
+            self.header.bind(seq, lambda _e: (self.toggle(), "break")[1])
+        self.header.bind("<FocusIn>",
+                         lambda _e: self.header.configure(border_width=2))
+        self.header.bind("<FocusOut>",
+                         lambda _e: self.header.configure(border_width=0))
+
+    def _cs_apply(self):
+        self.header.configure(text=("▾ " if self._cs_open else "▸ ") + self._cs_title)
+        if self._cs_open:
+            self.body.grid()
+        else:
+            self.body.grid_remove()
+
+    @property
+    def key(self) -> str:
+        return self._cs_key
+
+    @property
+    def expanded(self) -> bool:
+        return self._cs_open
+
+    def toggle(self):
+        self._cs_open = not self._cs_open
+        self._cs_apply()
+        if self._cs_on_toggle:
+            self._cs_on_toggle(self._cs_key, self._cs_open)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # PAINEL: CONFIGURAÇÕES
 # ══════════════════════════════════════════════════════════════════════════════
 
 class ConfigPanel(ctk.CTkFrame):
-    """Painel de configuração. Escreve direto no LayoutConfig e avisa o app."""
+    """Painel de configuração. Escreve direto no LayoutConfig e avisa o app.
 
-    def __init__(self, master, cfg: LayoutConfig, on_change, on_make_bat, **kw):
+    Três zonas (SPEC-F3-UI §4): grade fixa no topo, accordion rolável no meio,
+    resumo fixo embaixo (contador, célula e guarda de qualidade).
+    """
+
+    BOTTOM_H = 84   # teto da zona inferior: não empurrar «Gerar» para fora em 768 px
+
+    def __init__(self, master, cfg: LayoutConfig, on_change,
+                 sections_open: Optional[Dict[str, bool]] = None,
+                 on_sections_change=None, **kw):
         super().__init__(master, **kw)
-        self.cfg         = cfg
-        self.on_change   = on_change
-        self.on_make_bat = on_make_bat
-        self.presets     = SettingsStore.load_presets()
+        self.cfg       = cfg
+        self.on_change = on_change
+        self.presets   = SettingsStore.load_presets()
+        self._sections_state     = normalize_sections_open(sections_open)
+        self._on_sections_change = on_sections_change
+        self._sections: Dict[str, CollapsibleSection] = {}
         self._build()
 
     # ── Helpers de montagem ──────────────────────────────────────────────────
 
-    def _section(self, text: str, row: int) -> ctk.CTkFrame:
-        ctk.CTkLabel(self, text=text, font=ctk.CTkFont(size=12, weight="bold"),
-                     anchor="w").grid(row=row, column=0, columnspan=2,
-                                      sticky="w", padx=10, pady=(10, 2))
-        ctk.CTkFrame(self, height=1, fg_color=("gray70", "gray35")).grid(
-            row=row+1, column=0, columnspan=2, sticky="ew", padx=10)
-        f = ctk.CTkFrame(self, fg_color="transparent")
-        f.grid(row=row+2, column=0, columnspan=2, sticky="ew", padx=10, pady=4)
-        f.columnconfigure(1, weight=1)
-        return f
+    def _acc_section(self, key: str, title: str) -> ctk.CTkFrame:
+        """Cria uma seção do accordion e devolve o corpo para receber os campos.
+
+        `row=` fixo pela ordem de SECTION_DEFAULTS: abrir/fechar não embaralha.
+        """
+        sec = CollapsibleSection(self._zone_acc, title, key,
+                                 expanded=self._sections_state[key],
+                                 on_toggle=self._on_section_toggle)
+        sec.grid(row=list(SECTION_DEFAULTS).index(key), column=0,
+                 sticky="ew", padx=2, pady=2)
+        self._sections[key] = sec
+        return sec.body
+
+    def _on_section_toggle(self, key: str, expanded: bool):
+        self._sections_state[key] = expanded
+        if self._on_sections_change:
+            self._on_sections_change(dict(self._sections_state))
+
+    def sections_open(self) -> Dict[str, bool]:
+        """Estado atual do accordion, para o app persistir."""
+        return dict(self._sections_state)
 
     @staticmethod
     def _lbl(parent, text, row, col=0):
@@ -1057,13 +1216,31 @@ class ConfigPanel(ctk.CTkFrame):
 
     def _build(self):
         self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=1)
-        r = 0
+        self.rowconfigure(1, weight=1)
 
-        # ── GRADE ──
-        f = self._section("Grade (colunas × linhas)", r); r += 3
+        self._zone_top = ctk.CTkFrame(self, fg_color="transparent")
+        self._zone_top.grid(row=0, column=0, sticky="ew", padx=6, pady=(6, 0))
+        self._zone_acc = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self._zone_acc.grid(row=1, column=0, sticky="nsew", padx=2, pady=4)
+        self._zone_acc.columnconfigure(0, weight=1)
+        self._zone_bottom = ctk.CTkFrame(self, height=self.BOTTOM_H)
+        self._zone_bottom.grid(row=2, column=0, sticky="ew", padx=6, pady=(0, 6))
+        self._zone_bottom.grid_propagate(False)
+        self._zone_bottom.columnconfigure(0, weight=1)
+
+        self._build_grid_zone(self._zone_top)
+        self._build_accordion()
+        self._build_summary_zone(self._zone_bottom)
+
+    def _build_grid_zone(self, f):
+        """Zona fixa do topo: a grade muda a cada trabalho, fica sempre à vista."""
+        f.columnconfigure(1, weight=1)
+        ctk.CTkLabel(f, text="Grade (colunas × linhas)", anchor="w",
+                     font=ctk.CTkFont(size=12, weight="bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w", padx=4, pady=(2, 2))
+
         grid_box = ctk.CTkFrame(f, fg_color="transparent")
-        grid_box.grid(row=0, column=0, columnspan=2, sticky="ew")
+        grid_box.grid(row=1, column=0, columnspan=2, sticky="ew")
 
         spin_col = ctk.CTkFrame(grid_box, fg_color="transparent")
         spin_col.pack(side="left", padx=(0, 8))
@@ -1084,10 +1261,6 @@ class ConfigPanel(ctk.CTkFrame):
             ctk.CTkButton(line, text="+", width=24, height=24,
                           command=lambda a=delta_fn: self._bump(a, +1)).pack(side="left")
 
-        # Aplica o que foi digitado à mão nas caixas
-        for var in (self._cols_var, self._rows_var):
-            var.trace_add("write", lambda *_: None)
-
         ctk.CTkButton(spin_col, text="Aplicar valores digitados", height=24,
                       font=ctk.CTkFont(size=10),
                       command=self._apply_typed_grid).pack(anchor="w", pady=(4, 0))
@@ -1096,34 +1269,38 @@ class ConfigPanel(ctk.CTkFrame):
         self.grid_preview.pack(side="left")
         self.grid_preview.draw(self.cfg.cols, self.cfg.rows)
 
-        self._lbl(f, "Atalhos:", 1)
+        self._lbl(f, "Atalhos:", 2)
         self._shortcut_var = tk.StringVar(value="—")
         ctk.CTkOptionMenu(f, variable=self._shortcut_var,
                           values=["—"] + list(NUP_SHORTCUTS.keys()),
                           command=self._on_shortcut, width=170).grid(
-            row=1, column=1, sticky="w", padx=4)
+            row=2, column=1, sticky="w", padx=4)
+
+    def _build_summary_zone(self, f):
+        """Zona fixa de baixo: feedback (contador, célula, qualidade), não config."""
+        self._sheet_info_var = tk.StringVar(value="")
+        ctk.CTkLabel(f, textvariable=self._sheet_info_var, anchor="w",
+                     font=ctk.CTkFont(size=11, weight="bold")).grid(
+            row=0, column=0, sticky="w", padx=8, pady=(2, 0))
 
         self._cell_var = tk.StringVar(value="")
-        ctk.CTkLabel(f, textvariable=self._cell_var, font=ctk.CTkFont(size=10),
+        ctk.CTkLabel(f, textvariable=self._cell_var, anchor="w",
+                     font=ctk.CTkFont(size=10),
                      text_color=("gray50", "gray60")).grid(
-            row=2, column=0, columnspan=2, sticky="w", padx=4)
+            row=1, column=0, sticky="w", padx=8)
 
-        # ── AJUSTE ──
-        f1 = self._section("Ajuste da imagem", r); r += 3
-        self._lbl(f1, "Modo:", 0)
-        self._fit_var = tk.StringVar(
-            value=FIT_LABELS[FIT_KEYS.index(self.cfg.fit_mode)])
-        ctk.CTkOptionMenu(f1, variable=self._fit_var, values=FIT_LABELS,
-                          command=self._on_fit, width=160).grid(
-            row=0, column=1, sticky="w", padx=4)
+        self._qual_var = tk.StringVar(value="")
+        self._qual_lbl = ctk.CTkLabel(f, textvariable=self._qual_var, anchor="w",
+                                      justify="left", wraplength=290,
+                                      font=ctk.CTkFont(size=10))
+        self._qual_lbl.grid(row=2, column=0, sticky="nw", padx=8)
+        # A quebra de linha acompanha a largura do painel (o divisor é móvel).
+        f.bind("<Configure>", lambda e: self._qual_lbl.configure(
+            wraplength=max(200, e.width - 24)))
 
-        self._auto_var = tk.BooleanVar(value=self.cfg.auto_rotate)
-        ctk.CTkCheckBox(f1, text="Auto-Rotate (girar se necessário)",
-                        variable=self._auto_var, command=self._on_auto).grid(
-            row=1, column=0, columnspan=2, sticky="w", padx=4, pady=2)
-
+    def _build_accordion(self):
         # ── PAPEL ──
-        f2 = self._section("Papel e resolução", r); r += 3
+        f2 = self._acc_section("papel", "Papel e resolução")
         self._lbl(f2, "Papel:", 0)
         self._paper_var = tk.StringVar(value=self.cfg.paper_key)
         ctk.CTkOptionMenu(f2, variable=self._paper_var, values=list(PAPER_SIZES.keys()),
@@ -1142,15 +1319,22 @@ class ConfigPanel(ctk.CTkFrame):
         self._dpi_var = tk.StringVar(value=str(self.cfg.dpi))
         self._num_entry(f2, self._dpi_var, 3, cb=lambda _: self._on_dpi())
 
-        # Guarda de qualidade
-        self._qual_var = tk.StringVar(value="")
-        self._qual_lbl = ctk.CTkLabel(f2, textvariable=self._qual_var, anchor="w",
-                                      justify="left", wraplength=290,
-                                      font=ctk.CTkFont(size=10))
-        self._qual_lbl.grid(row=4, column=0, columnspan=2, sticky="w", padx=4, pady=(4, 0))
+        # ── AJUSTE ──
+        f1 = self._acc_section("ajuste", "Ajuste da imagem")
+        self._lbl(f1, "Modo:", 0)
+        self._fit_var = tk.StringVar(
+            value=FIT_LABELS[FIT_KEYS.index(self.cfg.fit_mode)])
+        ctk.CTkOptionMenu(f1, variable=self._fit_var, values=FIT_LABELS,
+                          command=self._on_fit, width=160).grid(
+            row=0, column=1, sticky="w", padx=4)
+
+        self._auto_var = tk.BooleanVar(value=self.cfg.auto_rotate)
+        ctk.CTkCheckBox(f1, text="Auto-Rotate (girar se necessário)",
+                        variable=self._auto_var, command=self._on_auto).grid(
+            row=1, column=0, columnspan=2, sticky="w", padx=4, pady=2)
 
         # ── MARGENS ──
-        f3 = self._section("Margens e espaçamento", r); r += 3
+        f3 = self._acc_section("margens", "Margens e espaçamento")
         self._lbl(f3, "Margem ext. (mm):", 0)
         self._mo_var = tk.StringVar(value=str(self.cfg.margin_outer_mm))
         self._num_entry(f3, self._mo_var, 0, cb=lambda _: self._on_margins())
@@ -1165,7 +1349,7 @@ class ConfigPanel(ctk.CTkFrame):
         self._bg_btn.grid(row=2, column=1, sticky="w", padx=4, pady=2)
 
         # ── CORTE ──
-        f4 = self._section("Linhas de corte", r); r += 3
+        f4 = self._acc_section("corte", "Linhas de corte")
         self._cuts_var = tk.BooleanVar(value=self.cfg.cut_lines)
         ctk.CTkCheckBox(f4, text="Habilitar linhas de corte", variable=self._cuts_var,
                         command=self._on_cuts).grid(row=0, column=0, columnspan=2,
@@ -1191,7 +1375,7 @@ class ConfigPanel(ctk.CTkFrame):
         self._cut_col_btn.grid(row=4, column=1, sticky="w", padx=4, pady=2)
 
         # ── SAÍDA ──
-        f5 = self._section("Saída", r); r += 3
+        f5 = self._acc_section("saida", "Saída")
         self._lbl(f5, "Formato:", 0)
         self._fmt_var = tk.StringVar(value=self.cfg.output_format)
         ctk.CTkOptionMenu(f5, variable=self._fmt_var, values=OUT_FORMATS,
@@ -1231,34 +1415,6 @@ class ConfigPanel(ctk.CTkFrame):
                      font=ctk.CTkFont(size=10)).grid(row=0, column=0, sticky="ew")
         ctk.CTkButton(dir2_row, text="…", width=30,
                       command=self._pick_dir2).grid(row=0, column=1, padx=(4, 0))
-
-        # ── PRESETS ──
-        f6 = self._section("Presets", r); r += 3
-        self._preset_var = tk.StringVar(value="—")
-        ctk.CTkOptionMenu(f6, variable=self._preset_var, values=self._preset_names(),
-                          command=self._on_load_preset, width=170).grid(
-            row=0, column=0, columnspan=2, sticky="w", padx=4)
-        pbtn = ctk.CTkFrame(f6, fg_color="transparent")
-        pbtn.grid(row=1, column=0, columnspan=2, sticky="w", padx=4, pady=(4, 0))
-        ctk.CTkButton(pbtn, text="Salvar atual", width=100,
-                      command=self._save_preset).pack(side="left", padx=(0, 4))
-        ctk.CTkButton(pbtn, text="Excluir", width=70, fg_color="#663333",
-                      hover_color="#993333", command=self._delete_preset).pack(side="left")
-
-        # ── ATALHO ──
-        f7 = self._section("Atalho", r); r += 3
-        ctk.CTkButton(f7, text="Gerar .bat para abrir a GUI", height=30,
-                      command=self.on_make_bat).grid(row=0, column=0, columnspan=2,
-                                                     sticky="ew", padx=4)
-        ctk.CTkLabel(f7, text="Cria um atalho que abre a ferramenta sem console.",
-                     font=ctk.CTkFont(size=10), text_color=("gray50", "gray60"),
-                     anchor="w").grid(row=1, column=0, columnspan=2,
-                                      sticky="w", padx=4, pady=(2, 0))
-
-        self._sheet_info_var = tk.StringVar(value="")
-        ctk.CTkLabel(self, textvariable=self._sheet_info_var, font=ctk.CTkFont(size=10),
-                     text_color=("gray50", "gray60")).grid(
-            row=r, column=0, columnspan=2, sticky="w", padx=12, pady=6)
 
     # ── Callbacks: grade ─────────────────────────────────────────────────────
 
@@ -1400,50 +1556,37 @@ class ConfigPanel(ctk.CTkFrame):
             self._on_output()
 
     # ── Presets ──────────────────────────────────────────────────────────────
+    # O menu que os lista vive no app e é reconstruído a cada abertura; aqui
+    # ficam só os dados e as ações.
 
-    def _preset_names(self) -> List[str]:
-        return ["—"] + sorted(self.presets.keys())
+    def preset_names(self) -> List[str]:
+        return sorted(self.presets.keys())
 
-    def _save_preset(self):
+    def save_preset(self):
         dlg = ctk.CTkInputDialog(text="Nome do preset:", title="Salvar preset")
         name = (dlg.get_input() or "").strip()
         if not name:
             return
         self.presets[name] = self.cfg.preset_dict()
         if SettingsStore.save_presets(self.presets):
-            self._refresh_preset_menu(name)
             messagebox.showinfo("Preset salvo", f"Preset «{name}» salvo.")
         else:
             messagebox.showwarning("Não foi possível salvar",
                                    "Falha ao gravar o arquivo de presets.")
 
-    def _delete_preset(self):
-        name = self._preset_var.get()
+    def delete_preset(self, name: str):
         if name in self.presets and messagebox.askyesno(
                 "Excluir preset", f"Excluir o preset «{name}»?"):
             self.presets.pop(name, None)
             SettingsStore.save_presets(self.presets)
-            self._refresh_preset_menu("—")
 
-    def _on_load_preset(self, name: str):
+    def load_preset(self, name: str):
         data = self.presets.get(name)
         if not data:
             return
         self.cfg.from_dict(data)
         self.refresh_from_config()
         self.on_change()
-
-    def _refresh_preset_menu(self, select: str):
-        for child in self.winfo_children():
-            pass  # o OptionMenu é recriado via configure abaixo
-        self._preset_var.set(select)
-        # Reconstrói os valores do menu de presets
-        for w in self.winfo_children():
-            if isinstance(w, ctk.CTkFrame):
-                for sub in w.winfo_children():
-                    if isinstance(sub, ctk.CTkOptionMenu) and \
-                       sub.cget("variable") is self._preset_var:
-                        sub.configure(values=self._preset_names())
 
     # ── Sincronização UI ← config ────────────────────────────────────────────
 
@@ -1594,14 +1737,19 @@ class PrintImposerApp(ctk.CTk):
         if not Path(self.cfg.input_dir or "").is_dir():
             self.cfg.input_dir = str(Path.home())
         self._saved_geometry = data.get("geometry", "")
+        # Arquivo da 1.1.x não tem a chave: cai no padrão (só «saida» aberta).
+        self._sections_open = normalize_sections_open(data.get("sections_open"))
 
     def _persist(self):
         try:
             geo = self.winfo_geometry()
         except Exception:
             geo = ""
+        sections = (self.cfg_panel.sections_open() if hasattr(self, "cfg_panel")
+                    else self._sections_open)
         SettingsStore.save_settings({"config": self.cfg.to_dict(),
                                      "geometry": geo,
+                                     "sections_open": sections,
                                      "version": VERSION})
 
     def _on_close(self):
@@ -1692,10 +1840,18 @@ class PrintImposerApp(ctk.CTk):
         header = ctk.CTkFrame(self, height=44, corner_radius=0,
                               fg_color=("gray80", "#12121e"))
         header.grid(row=0, column=0, sticky="ew")
-        ctk.CTkLabel(header,
-                     text=f"{APP_NAME}  —  Imposição de Páginas para Impressão",
+        ctk.CTkLabel(header, text=APP_NAME,
                      font=ctk.CTkFont(size=14, weight="bold")).pack(
-            side="left", padx=14, pady=8)
+            side="left", padx=(14, 10), pady=8)
+        self._menu_buttons: Dict[str, ctk.CTkButton] = {}
+        for title in MENU_TITLES:
+            btn = ctk.CTkButton(header, text=title, width=70, height=28,
+                                fg_color="transparent",
+                                hover_color=("gray70", "#2e2e44"),
+                                text_color=("gray10", "gray90"),
+                                command=lambda t=title: self._popup_menu(t))
+            btn.pack(side="left", padx=1, pady=8)
+            self._menu_buttons[title] = btn
         svg_note = f"SVG: {SVG_BACKEND}" if SVG_BACKEND else "SVG: indisponível"
         ctk.CTkLabel(header, text=f"v{VERSION}   ·   {svg_note}",
                      font=ctk.CTkFont(size=10),
@@ -1722,11 +1878,9 @@ class PrintImposerApp(ctk.CTk):
 
         cfg_outer = tk.Frame(self._right_pane, bg="#2a2a3a")
         cfg_outer.rowconfigure(0, weight=1); cfg_outer.columnconfigure(0, weight=1)
-        cfg_scroll = ctk.CTkScrollableFrame(cfg_outer)
-        cfg_scroll.grid(row=0, column=0, sticky="nsew")
-        self.cfg_panel = ConfigPanel(cfg_scroll, self.cfg, on_change=self._on_change,
-                                     on_make_bat=self._make_bat)
-        self.cfg_panel.pack(fill="both", expand=True)
+        self.cfg_panel = ConfigPanel(cfg_outer, self.cfg, on_change=self._on_change,
+                                     sections_open=self._sections_open)
+        self.cfg_panel.grid(row=0, column=0, sticky="nsew")
         self._right_pane.add(cfg_outer, minsize=300)
 
         prev_outer = tk.Frame(self._right_pane, bg="#2a2a3a")
@@ -1756,8 +1910,150 @@ class PrintImposerApp(ctk.CTk):
         ctk.CTkLabel(bottom, textvariable=self._status_var, font=ctk.CTkFont(size=10),
                      text_color=("gray50", "gray60")).grid(row=0, column=2, padx=12)
 
+        self._build_menus()
+        self._bind_shortcuts()
+
         # Sashes só depois que o Tk resolveu a geometria real.
         self.after(120, self._place_sashes)
+
+    # ── Menubar ──────────────────────────────────────────────────────────────
+    # Botões na topbar + tk.Menu.tk_popup: a faixa fica no tema escuro e o
+    # dropdown continua nativo (teclado, dismissal). Ver SPEC-F3-UI §5.
+
+    def _build_menus(self):
+        L = MENU_LABELS
+        self._menus: Dict[str, tk.Menu] ={t: tk.Menu(self, tearoff=0) for t in MENU_TITLES}
+
+        m = self._menus["Arquivo"]
+        m.add_command(label=L["add_files"], accelerator="Ctrl+O",
+                      command=lambda: self.img_panel._add_files())
+        m.add_command(label=L["add_folder"], accelerator="Ctrl+Shift+O",
+                      command=lambda: self.img_panel._add_folder())
+        m.add_command(label=L["clear"], command=lambda: self.img_panel._clear())
+        m.add_separator()
+        m.add_command(label=L["generate"], accelerator="Ctrl+G",
+                      command=self._start_generate)
+        m.add_command(label=L["open_out"], command=self._open_output_folder)
+        m.add_separator()
+        m.add_command(label=L["quit"], accelerator="Alt+F4", command=self._on_close)
+
+        # Presets entra vazio: é reconstruído a CADA abertura (ver _popup_menu).
+        self._presets_menu = tk.Menu(self._menus["Opções"], tearoff=0)
+        m = self._menus["Opções"]
+        m.add_cascade(label=L["presets"], menu=self._presets_menu)
+        m.add_separator()
+        m.add_command(label=L["make_bat"], command=self._show_shortcut_dialog)
+        m.add_separator()
+        m.add_command(label=L["reset"], command=self._reset_defaults)
+
+        m = self._menus["Ajuda"]
+        m.add_command(label=L["guide"], command=self._show_guide)
+        m.add_separator()
+        m.add_command(label=L["about"], command=self._show_about)
+
+    def _rebuild_presets_menu(self):
+        """Reconstrói o submenu a partir dos presets atuais (o bug de 1.1.x
+        era a lista só atualizar ao reabrir o app)."""
+        L = MENU_LABELS
+        pm = self._presets_menu
+        pm.delete(0, "end")
+        names = self.cfg_panel.preset_names()
+        for name in names:
+            pm.add_command(label=name,
+                           command=lambda n=name: self.cfg_panel.load_preset(n))
+        if names:
+            pm.add_separator()
+        pm.add_command(label=L["save_preset"], command=self.cfg_panel.save_preset)
+        del_menu = tk.Menu(pm, tearoff=0)
+        for name in names:
+            del_menu.add_command(
+                label=name, command=lambda n=name: self.cfg_panel.delete_preset(n))
+        pm.add_cascade(label=L["delete_preset"], menu=del_menu,
+                       state="normal" if names else "disabled")
+
+    def _popup_menu(self, title: str):
+        if title == "Opções":
+            self._rebuild_presets_menu()
+        btn = self._menu_buttons[title]
+        try:
+            self._menus[title].tk_popup(btn.winfo_rootx(),
+                                        btn.winfo_rooty() + btn.winfo_height())
+        finally:
+            self._menus[title].grab_release()
+
+    def _bind_shortcuts(self):
+        # bind_all: valem com o foco em qualquer painel. Shift+O chega como «O».
+        self.bind_all("<Control-o>", lambda _e: self.img_panel._add_files())
+        self.bind_all("<Control-O>", lambda _e: self.img_panel._add_folder())
+        self.bind_all("<Control-g>", lambda _e: self._start_generate())
+        self.bind_all("<Control-G>", lambda _e: self._start_generate())
+
+    def _open_output_folder(self):
+        self.cfg_panel._on_output()   # captura o que foi digitado sem sair do campo
+        if self.cfg.output_dir and Path(self.cfg.output_dir).is_dir():
+            self._open_folder(self.cfg.output_dir)
+        else:
+            messagebox.showinfo("Pasta de saída",
+                                "A pasta de saída ainda não existe. "
+                                "Gere os arquivos ou escolha outra pasta.")
+
+    def _reset_defaults(self):
+        if not messagebox.askyesno(
+                "Restaurar padrões",
+                "Voltar grade, papel, margens, corte e saída (formato e nomes) "
+                "aos valores padrão?\nAs pastas de entrada e saída não mudam."):
+            return
+        self.cfg.from_dict(LayoutConfig().preset_dict())
+        self.cfg_panel.refresh_from_config()
+        self._on_change()
+
+    def _show_guide(self):
+        win = ctk.CTkToplevel(self)
+        win.title("Guia rápido: Figma → impressão")
+        win.geometry("520x380")
+        win.transient(self)
+        box = ctk.CTkTextbox(win, wrap="word", font=ctk.CTkFont(size=12))
+        box.pack(fill="both", expand=True, padx=12, pady=(12, 6))
+        box.insert("1.0", QUICK_GUIDE)
+        box.configure(state="disabled")
+        ctk.CTkButton(win, text="Fechar", width=90, command=win.destroy).pack(pady=(0, 12))
+
+    def _show_about(self):
+        svg = SVG_BACKEND or "indisponível"
+        messagebox.showinfo(
+            f"Sobre o {APP_NAME}",
+            f"{APP_NAME} v{VERSION}\n"
+            "Imposição de páginas para impressão.\n\n"
+            f"SVG: {svg}\n"
+            f"Configuração: {SettingsStore.SETTINGS}")
+
+    def _show_shortcut_dialog(self):
+        """Explica o que é o atalho .bat ANTES de gerar (SPEC-F3-UI §6)."""
+        win = ctk.CTkToplevel(self)
+        win.title("Criar atalho")
+        win.geometry("420x330")
+        win.resizable(False, False)
+        win.transient(self)
+        pyw = Path(sys.executable).with_name("pythonw.exe")
+        interp = str(pyw) if pyw.exists() else sys.executable
+        script = str(Path(__file__).resolve())
+        text = (
+            "Um atalho .bat abre o PrintImposer com dois cliques, sem janela de console.\n\n"
+            "Sugerimos salvá-lo na pasta acima da pasta do projeto, fora da área de "
+            "trabalho. Qualquer pasta serve: o .bat grava caminhos absolutos.\n\n"
+            "Se você mover a ferramenta, o atalho para de funcionar — gere outro.\n\n"
+            f"Interpretador: {interp}\nScript: {script}")
+        ctk.CTkLabel(win, text=text, justify="left", anchor="nw", wraplength=390,
+                     font=ctk.CTkFont(size=11)).pack(fill="both", expand=True,
+                                                    padx=14, pady=(14, 6))
+        row = ctk.CTkFrame(win, fg_color="transparent")
+        row.pack(pady=(0, 12))
+        ctk.CTkButton(row, text="Criar atalho…", width=120,
+                      command=lambda: self._make_bat(win)).pack(side="left", padx=4)
+        ctk.CTkButton(row, text="Fechar", width=90, fg_color="#444455",
+                      command=win.destroy).pack(side="left", padx=4)
+        # CTkToplevel ainda não está mapeado aqui: grab_set antes falha no Windows.
+        win.after(150, lambda: (win.winfo_exists() and (win.grab_set(), win.focus())))
 
     # ── Reatividade ──────────────────────────────────────────────────────────
 
@@ -1809,14 +2105,13 @@ class PrintImposerApp(ctk.CTk):
 
     # ── Gerador de .bat ──────────────────────────────────────────────────────
 
-    def _make_bat(self):
+    def _make_bat(self, parent=None):
         script = str(Path(__file__).resolve())
         content = build_launcher_bat(script)
-        initial = str(Path.home() / "Desktop") if (Path.home() / "Desktop").is_dir() \
-            else str(Path.home())
         dest = filedialog.asksaveasfilename(
+            parent=parent or self,
             title="Salvar atalho .bat", defaultextension=".bat",
-            initialfile="printimposer.bat", initialdir=initial,
+            initialfile="printimposer.bat", initialdir=shortcut_initial_dir(),
             filetypes=[("Arquivo de lote", "*.bat")])
         if not dest:
             return

@@ -523,6 +523,128 @@ class WorkAreaTests(unittest.TestCase):
         self.assertNotIn("winfo_screenheight()", corpo)
 
 
+class SectionsOpenTests(unittest.TestCase):
+    """Contrato do `sections_open` no settings.json (SPEC-F3-UI §9)."""
+
+    def setUp(self):
+        self._dir = tempfile.TemporaryDirectory()
+        self._orig = (pi.SettingsStore.DIR, pi.SettingsStore.SETTINGS)
+        pi.SettingsStore.DIR = Path(self._dir.name)
+        pi.SettingsStore.SETTINGS = Path(self._dir.name) / "settings.json"
+
+    def tearDown(self):
+        pi.SettingsStore.DIR, pi.SettingsStore.SETTINGS = self._orig
+        self._dir.cleanup()
+
+    def test_roundtrip(self):
+        estado = {"papel": True, "ajuste": False, "margens": True,
+                  "corte": False, "saida": False}
+        self.assertTrue(pi.SettingsStore.save_settings({"sections_open": estado}))
+        lido = pi.SettingsStore.load_settings().get("sections_open")
+        self.assertEqual(pi.normalize_sections_open(lido), estado)
+
+    def test_arquivo_da_1_1_sem_a_chave_cai_no_padrao(self):
+        pi.SettingsStore.save_settings({"config": {}, "geometry": "1180x820+0+0"})
+        lido = pi.SettingsStore.load_settings().get("sections_open")
+        estado = pi.normalize_sections_open(lido)
+        self.assertEqual(estado, pi.SECTION_DEFAULTS)
+        self.assertEqual([k for k, v in estado.items() if v], ["saida"])
+
+    def test_chave_desconhecida_e_ignorada(self):
+        estado = pi.normalize_sections_open({"papel": True, "inexistente": True})
+        self.assertNotIn("inexistente", estado)
+        self.assertTrue(estado["papel"])
+        self.assertEqual(set(estado), set(pi.SECTION_DEFAULTS))
+
+    def test_valor_que_nao_e_booleano_e_ignorado(self):
+        estado = pi.normalize_sections_open({"papel": "sim", "saida": 0})
+        self.assertEqual(estado, pi.SECTION_DEFAULTS)
+
+    def test_lixo_no_lugar_do_dicionario_cai_no_padrao(self):
+        for lixo in (None, [], "x", 3):
+            self.assertEqual(pi.normalize_sections_open(lixo), pi.SECTION_DEFAULTS)
+
+
+class MenuAndDialogTests(unittest.TestCase):
+    """Menubar e diálogo do atalho. Sem Tk real: a checagem é pelo código-fonte,
+    como nos testes AST acima. O comportamento de verdade fica no /smoke."""
+
+    ESPERADOS = {
+        "Arquivo": ["Adicionar arquivos…", "Adicionar pasta…", "Limpar lista",
+                    "Gerar arquivos", "Abrir pasta de saída", "Sair"],
+        "Opções":  ["Presets", "Salvar atual…", "Excluir…", "Criar atalho…",
+                    "Restaurar configurações padrão"],
+        "Ajuda":   ["Guia rápido: Figma → impressão", "Sobre o PrintImposer"],
+    }
+
+    def setUp(self):
+        self.src = (Path(__file__).resolve().parent.parent / "print_imposer.py"
+                    ).read_text(encoding="utf-8")
+        self.tree = ast.parse(self.src)
+
+    def _metodo(self, nome):
+        for node in ast.walk(self.tree):
+            if isinstance(node, ast.FunctionDef) and node.name == nome:
+                return node
+        self.fail(f"método {nome} não existe")
+
+    def _chaves_de_rotulo_usadas(self, *metodos):
+        """Chaves `L["..."]` lidas pelos métodos que montam os menus."""
+        usadas = set()
+        for nome in metodos:
+            for node in ast.walk(self._metodo(nome)):
+                if (isinstance(node, ast.Subscript)
+                        and isinstance(node.value, ast.Name)
+                        and node.value.id == "L"
+                        and isinstance(node.slice, ast.Constant)):
+                    usadas.add(node.slice.value)
+        return usadas
+
+    def test_titulos_do_menubar(self):
+        self.assertEqual(pi.MENU_TITLES, tuple(self.ESPERADOS))
+
+    def test_rotulos_da_spec_existem(self):
+        todos = set(pi.MENU_LABELS.values())
+        for menu, rotulos in self.ESPERADOS.items():
+            for r in rotulos:
+                self.assertIn(r, todos, f"{menu}: falta «{r}»")
+
+    def test_todo_rotulo_esta_ligado_a_um_menu(self):
+        usadas = self._chaves_de_rotulo_usadas("_build_menus", "_rebuild_presets_menu")
+        self.assertEqual(usadas, set(pi.MENU_LABELS))
+
+    def test_submenu_de_presets_e_reconstruido_a_cada_abertura(self):
+        """Era o bug de 1.1.x: a lista só atualizava ao reabrir o app."""
+        popup = ast.unparse(self._metodo("_popup_menu"))
+        self.assertIn("_rebuild_presets_menu", popup)
+
+    def test_atalho_abre_na_pasta_pai_da_raiz(self):
+        raiz = Path(pi.__file__).resolve().parent
+        self.assertEqual(Path(pi.shortcut_initial_dir()), raiz.parent)
+
+    def test_make_bat_usa_a_pasta_pai_e_nao_a_area_de_trabalho(self):
+        corpo = ast.unparse(self._metodo("_make_bat"))
+        self.assertIn("shortcut_initial_dir()", corpo)
+        self.assertNotIn("Desktop", corpo)
+
+    def test_guia_rapido_vem_de_uma_constante_unica(self):
+        self.assertIn("Figma", pi.QUICK_GUIDE)
+        self.assertIn("QUICK_GUIDE", ast.unparse(self._metodo("_show_guide")))
+
+    def test_secao_recolhivel_fecha_com_grid_remove_e_nao_destroy(self):
+        cls = next(n for n in ast.walk(self.tree)
+                   if isinstance(n, ast.ClassDef) and n.name == "CollapsibleSection")
+        corpo = ast.unparse(cls)
+        self.assertIn("grid_remove()", corpo)
+        self.assertNotIn(".destroy(", corpo)
+
+    def test_zona_inferior_respeita_o_teto_de_altura(self):
+        self.assertLessEqual(pi.ConfigPanel.BOTTOM_H, 84)
+
+    def test_versao(self):
+        self.assertEqual(pi.VERSION, "1.2.0")
+
+
 class LauncherTests(unittest.TestCase):
     def test_bat_e_ascii_puro(self):
         """CMD usa codepage legado: acento vindo de UTF-8 sai corrompido."""

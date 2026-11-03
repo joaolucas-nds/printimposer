@@ -33,7 +33,7 @@ Espaçamento independente em X e em Y, em vez de um valor único "entre imagens"
 Mandar para a impressora sem arquivo intermediário. No Windows passa por API de impressão/spooler. Avaliar viabilidade.
 
 ### 2026-07-23 — `.bat` gerado na pasta-pai do projeto, não na Área de Trabalho
-Nota do dono: «o .bat é para ser gerado em uma pasta "anterior" a pasta raíz do projeto, entende? E não na área de trabalho, assim fica mais fácil para mim, organizar.» Vira requisito do diálogo do `.bat` na F3 (SPEC-F3 §6). **F3.**
+Nota do dono: «o .bat é para ser gerado em uma pasta "anterior" a pasta raíz do projeto, entende? E não na área de trabalho, assim fica mais fácil para mim, organizar.» Vira requisito do diálogo do `.bat` na F3 (SPEC-F3 §6). **F3.** **Implementada na 1.2.0.**
 
 ---
 

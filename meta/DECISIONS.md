@@ -355,3 +355,14 @@ O PDF passa a ser escrito por uma função própria, só com a biblioteca padrã
 - PDF sem perda fica do tamanho do PNG (maior que o JPEG de antes — medido numa folha sintética: PNG 11,3 MB × PDF-JPEG 3,2 MB); o modo JPEG continua disponível para arquivo menor.
 - O projeto passa a manter um escritor de PDF mínimo: estrutura (catálogo, páginas, `xref`) coberta por testes headless, e equivalência de pixels conferida por sonda com `pypdfium2` fora do Python do dono.
 - Se a imposição vetorial for aprovada no portão, este escritor é substituído pelo pipeline vetorial; até lá, é o único caminho de PDF.
+
+---
+
+## FIX-006 — SVG saía ampliado com Auto-Rotate e no modo Preencher
+**Data:** 2026-11-04 · **Gravidade: baixa** — latente: não se manifestava na máquina do dono (sem back-end de SVG). · **Status:** resolvida na 1.5.0 (wo0009)
+
+- **Sintoma (por leitura de código, não medido em execução):** arte SVG deitada numa célula em pé saía pequena e esticada; no modo Preencher, o `_place_image` recortava e ampliava.
+- **Causa raiz:** `open_source` passava a caixa `(cw, ch)` direto a `rasterize_svg`, que ignorava o Auto-Rotate (o giro vinha depois do render) e usava sempre a menor escala, qualquer que fosse o modo de ajuste.
+- **Solução:** `svg_intrinsic_size` (width/height, viewBox ou medida do back-end) dá a proporção; `vector_render_box` (regra única, também usada pelo PDF) gira a caixa; `rasterize_svg` segue fit/fill/stretch como o `rasterize_pdf`.
+- **Guarda de regressão:** `SvgFinalOrientationTests`, com stub do rasterizador (sem back-end). Back-end real não ligou nesta máquina (`libcairo` ausente), então a prova é o stub.
+- **Lição:** ao dar à fonte vetorial a caixa de render, a orientação e o modo de ajuste valem para TODA fonte vetorial — conserto num formato (PDF, 1.4.0) pede a conferência do irmão.

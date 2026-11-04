@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PrintImposer v1.4.1
+PrintImposer v1.5.0
 Ferramenta de Imposição de Páginas para Impressão em Massa
 
 Selecione imagens, configure o layout e gere PDFs/PNGs prontos para impressão.
@@ -40,6 +40,12 @@ Novidades da 1.4.1 (robustez):
   - A geração trabalha sobre cópias da configuração e da lista: mexer nelas
     durante uma geração longa não mistura folhas
   - Guia rápido sem amarrar a uma ferramenta de design
+
+Novidades da 1.5.0:
+  - Saída WebP (sem perda ou com perda) e AVIF, para compartilhar
+  - A guarda de qualidade olha as imagens embutidas nas páginas de PDF
+  - SVG rasterizado já na orientação final e respeitando o modo de ajuste
+    (antes saía ampliado com Auto-Rotate e no modo Preencher)
 """
 
 import os
@@ -173,6 +179,17 @@ def _probe_heif() -> bool:
         return False
 
 
+def _probe_can_save(fmt: str) -> bool:
+    """Grava uma imagem mínima em memória: `features.check` verdadeiro não
+    garante a GRAVAÇÃO (FIX-002) — o codec pode estar só de leitura."""
+    import io
+    try:
+        Image.new("RGB", (8, 8)).save(io.BytesIO(), fmt)
+        return True
+    except Exception:
+        return False
+
+
 AVIF_OK: bool = _probe_avif()
 HEIF_OK: bool = _probe_heif()
 
@@ -181,7 +198,7 @@ HEIF_OK: bool = _probe_heif()
 # CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION  = "1.4.1"
+VERSION  = "1.5.0"
 APP_NAME = "PrintImposer"
 MM_TO_INCH = 1.0 / 25.4
 
@@ -233,13 +250,30 @@ NUP_SHORTCUTS: Dict[str, Tuple[int, int]] = {
 LINE_STYLES  = ["Sólida", "Tracejada", "Pontilhada"]
 FIT_LABELS   = ["Ajustar (fit)", "Preencher (fill)", "Esticar (stretch)"]
 FIT_KEYS     = ["fit",           "fill",              "stretch"]
-OUT_FORMATS  = ["PNG", "PDF", "JPEG", "TIFF"]   # PNG primeiro: é o padrão agora
+def build_out_formats(can_save=_probe_can_save) -> List[str]:
+    """Formatos de saída oferecidos: WEBP e AVIF só se o Pillow GRAVA de fato."""
+    fmts = ["PNG", "PDF", "JPEG", "TIFF"]   # PNG primeiro: é o padrão agora
+    for extra in ("WEBP", "AVIF"):
+        if can_save(extra):
+            fmts.append(extra)
+    return fmts
+
+
+OUT_FORMATS  = build_out_formats()
+OUT_EXT      = {"PDF": "pdf", "PNG": "png", "JPEG": "jpg", "TIFF": "tif",
+                "WEBP": "webp", "AVIF": "avif"}
+# Formatos só para compartilhar: a UI avisa que gráfica não pede isso.
+SHARE_FORMATS = ("WEBP", "AVIF")
 
 # Compressão do PDF: chave persistida → rótulo na UI (DEC-014).
 PDF_COMP_KEYS   = ["lossless", "jpeg"]
 PDF_COMP_LABELS = ["Sem perda", "JPEG"]
 JPEG_Q_MIN, JPEG_Q_MAX = 50, 100
 PDF_HEADER = b"%PDF-1.4\n"
+
+# Compressão do WebP: chave persistida → rótulo na UI.
+WEBP_COMP_KEYS   = ["lossless", "lossy"]
+WEBP_COMP_LABELS = ["Sem perda", "Com perda"]
 
 # Limiares da guarda de qualidade (razão entre pixels da fonte e da célula).
 QUALITY_OK   = 1.00   # fonte >= célula: sem upscale
@@ -388,24 +422,77 @@ def default_output_dir() -> str:
 # CARREGAMENTO DE IMAGEM
 # ══════════════════════════════════════════════════════════════════════════════
 
-def rasterize_svg(path: str, box_w: int, box_h: int) -> Image.Image:
-    """Rasteriza um SVG dentro da caixa (box_w × box_h), preservando a proporção.
+_SVG_UNITS = {"": 1.0, "px": 1.0, "pt": 4.0 / 3.0, "pc": 16.0,
+              "mm": 96.0 / 25.4, "cm": 96.0 / 2.54, "in": 96.0}
+_svg_size_cache: Dict[Tuple[str, float], Tuple[float, float]] = {}
 
-    O ganho central: como o desenho é recalculado na resolução da célula, um SVG
-    nunca sofre upscale — imprime nítido em qualquer DPI. É a razão de o SVG ter
-    sido antecipado da F3 para a F2.
+
+def _svg_length(raw: Optional[str]) -> Optional[float]:
+    """Comprimento SVG (`210mm`, `100px`, `50`) em px de CSS; None se ausente ou relativo (%)."""
+    import re
+    if not raw:
+        return None
+    m = re.fullmatch(r"\s*([0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)\s*([a-zA-Z]*)\s*", raw)
+    if not m or m.group(2).lower() not in _SVG_UNITS:
+        return None
+    val = float(m.group(1)) * _SVG_UNITS[m.group(2).lower()]
+    return val if val > 0 else None
+
+
+def _svg_backend_size(path: str) -> Tuple[float, float]:
+    """Tamanho intrínseco medido pelo back-end (renderiza pequeno) — último recurso."""
+    import io
+    if SVG_BACKEND == "cairosvg":
+        png = _SVG_MODS["cairosvg"].svg2png(url=path, output_width=64)
+        return Image.open(io.BytesIO(png)).size
+    if SVG_BACKEND == "svglib":
+        drawing = _SVG_MODS["svg2rlg"](path)
+        if drawing is None:
+            raise ValueError("SVG ilegível")
+        return float(drawing.width), float(drawing.height)
+    raise RuntimeError("Nenhum back-end de SVG disponível")
+
+
+def svg_intrinsic_size(path: str) -> Tuple[float, float]:
+    """Tamanho intrínseco (w, h) do SVG: width/height, senão viewBox, senão medida pelo back-end.
+
+    Só a PROPORÇÃO importa para escolher a escala. Cache por (caminho, mtime):
+    a guarda e o preview consultam o mesmo arquivo muitas vezes.
     """
+    try:
+        key = (path, os.path.getmtime(path))
+    except OSError:
+        key = (path, 0.0)
+    hit = _svg_size_cache.get(key)
+    if hit:
+        return hit
+    size: Optional[Tuple[float, float]] = None
+    try:
+        import xml.etree.ElementTree as ET
+        root = ET.parse(path).getroot()
+        w, h = _svg_length(root.get("width")), _svg_length(root.get("height"))
+        if w and h:
+            size = (w, h)
+        else:
+            vb = (root.get("viewBox") or "").replace(",", " ").split()
+            if len(vb) == 4 and float(vb[2]) > 0 and float(vb[3]) > 0:
+                size = (float(vb[2]), float(vb[3]))
+    except Exception:
+        size = None
+    if size is None:
+        size = _svg_backend_size(path)
+    _svg_size_cache[key] = (float(size[0]), float(size[1]))
+    return _svg_size_cache[key]
+
+
+def _svg_backend_render(path: str, out_w: int, out_h: int) -> Image.Image:
+    """Desenha o SVG exatamente em (out_w × out_h) com o back-end ativo."""
     import io
 
     if SVG_BACKEND == "cairosvg":
-        cairosvg = _SVG_MODS["cairosvg"]
-        # Rasteriza pela largura; se estourar a altura, refaz limitando pela altura.
-        png = cairosvg.svg2png(url=path, output_width=box_w)
-        img = Image.open(io.BytesIO(png)).convert("RGBA")
-        if img.height > box_h:
-            png = cairosvg.svg2png(url=path, output_height=box_h)
-            img = Image.open(io.BytesIO(png)).convert("RGBA")
-        return img
+        png = _SVG_MODS["cairosvg"].svg2png(url=path, output_width=out_w,
+                                            output_height=out_h)
+        return Image.open(io.BytesIO(png)).convert("RGBA")
 
     if SVG_BACKEND == "svglib":
         svg2rlg  = _SVG_MODS["svg2rlg"]
@@ -416,16 +503,34 @@ def rasterize_svg(path: str, box_w: int, box_h: int) -> Image.Image:
         # svglib desenha no tamanho intrínseco; escalamos o desenho antes do render.
         dw = float(drawing.width) or 1.0
         dh = float(drawing.height) or 1.0
-        scale = min(box_w / dw, box_h / dh)
-        drawing.width  = dw * scale
-        drawing.height = dh * scale
-        drawing.scale(scale, scale)
+        drawing.width  = out_w
+        drawing.height = out_h
+        drawing.scale(out_w / dw, out_h / dh)
         buf = io.BytesIO()
         renderPM.drawToFile(drawing, buf, fmt="PNG", bg=0xFFFFFF)
         buf.seek(0)
         return Image.open(buf).convert("RGBA")
 
     raise RuntimeError("Nenhum back-end de SVG disponível")
+
+
+def rasterize_svg(path: str, box_w: int, box_h: int,
+                  fit_mode: str = "fit") -> Image.Image:
+    """Rasteriza um SVG para caber (ou cobrir) a caixa, sem ampliar depois.
+
+    O ganho central: como o desenho é recalculado na resolução da célula, um SVG
+    nunca sofre upscale — imprime nítido em qualquer DPI. Mesma regra do PDF:
+    fit: escala que cabe; fill: escala que cobre (o `_place_image` recorta);
+    stretch: cobre e reduz até (box_w, box_h).
+    """
+    iw, ih = svg_intrinsic_size(path)
+    pick = max if fit_mode in ("fill", "stretch") else min
+    scale = pick(box_w / iw, box_h / ih)
+    out_w, out_h = max(1, round(iw * scale)), max(1, round(ih * scale))
+    img = _svg_backend_render(path, out_w, out_h)
+    if fit_mode == "stretch" and img.size != (box_w, box_h):
+        img = img.resize((box_w, box_h), Image.LANCZOS)
+    return img
 
 
 def is_svg(path: str) -> bool:
@@ -477,17 +582,91 @@ def pdf_page_size(path: str, page: int) -> Tuple[float, float]:
         doc.close()
 
 
-def pdf_render_box(w_pt: float, h_pt: float, cw: int, ch: int,
-                   auto_rotate: bool) -> Tuple[int, int]:
-    """Caixa onde a página deve ser rasterizada, JÁ na orientação final.
+def vector_render_box(w: float, h: float, cw: int, ch: int,
+                      auto_rotate: bool) -> Tuple[int, int]:
+    """Caixa onde uma fonte vetorial (PDF ou SVG) deve ser rasterizada, JÁ na orientação final.
 
-    Com Auto-Rotate e orientação da página diferente da célula, o motor girará
+    Com Auto-Rotate e orientação da fonte diferente da célula, o motor girará
     a imagem 90°; renderizar na caixa (cw, ch) e girar depois desenharia a arte
     pequena e a ampliaria. Por isso a caixa nasce girada: (ch, cw).
     """
-    if auto_rotate and (cw >= ch) != (w_pt >= h_pt):
+    if auto_rotate and (cw >= ch) != (w >= h):
         return ch, cw
     return cw, ch
+
+
+def pdf_render_box(w_pt: float, h_pt: float, cw: int, ch: int,
+                   auto_rotate: bool) -> Tuple[int, int]:
+    """Caixa de render da página PDF — ver `vector_render_box`."""
+    return vector_render_box(w_pt, h_pt, cw, ch, auto_rotate)
+
+
+PDF_IMG_MIN_COVER = 0.10    # imagem que cobre menos que isso da página é logo/ícone
+_pdf_img_cache: Dict[Tuple[str, float, int], List[Tuple[int, int, float, float]]] = {}
+
+
+def pdf_inner_images(path: str, page: int) -> List[Tuple[int, int, float, float]]:
+    """Imagens raster relevantes dentro da página: [(px_w, px_h, w_pt, h_pt)].
+
+    w_pt/h_pt são a caixa da imagem na página; se a imagem está girada 90° no
+    PDF os px são trocados para casar com a caixa. Imagens que cobrem menos de
+    10% da página (logos, ícones) ficam de fora. Levanta se o PDF não abre —
+    o chamador decide ignorar o item.
+    """
+    try:
+        key = (path, os.path.getmtime(path), page)
+    except OSError:
+        key = (path, 0.0, page)
+    hit = _pdf_img_cache.get(key)
+    if hit is not None:
+        return hit
+    pdfium = _PDF_MODS["pdfium"]
+    import pypdfium2.raw as pdfium_raw  # type: ignore
+    out: List[Tuple[int, int, float, float]] = []
+    doc = pdfium.PdfDocument(path)
+    try:
+        pg = doc[page]
+        try:
+            pw, ph = pg.get_size()
+            for obj in pg.get_objects(filter=[pdfium_raw.FPDF_PAGEOBJ_IMAGE]):
+                left, bottom, right, top = obj.get_bounds()
+                bw, bh = abs(right - left), abs(top - bottom)
+                if bw <= 0 or bh <= 0 or bw * bh < PDF_IMG_MIN_COVER * pw * ph:
+                    continue
+                meta = obj.get_metadata()
+                px_w, px_h = int(meta.width), int(meta.height)
+                m = obj.get_matrix()
+                if abs(m.a) < abs(m.b):          # girada 90°: largura do bitmap vira altura
+                    px_w, px_h = px_h, px_w
+                if px_w > 0 and px_h > 0:
+                    out.append((px_w, px_h, float(bw), float(bh)))
+        finally:
+            pg.close()
+    finally:
+        doc.close()
+    _pdf_img_cache[key] = out
+    return out
+
+
+def pdf_inner_ratio(path: str, page: int, cw: int, ch: int,
+                    auto_rotate: bool, fit_mode: str) -> Optional[float]:
+    """Pior razão (px da imagem / px que ela ocupa na célula) entre as imagens da página.
+
+    A escala da página na célula é a MESMA do `rasterize_pdf` (inclusive a caixa
+    girada do Auto-Rotate). None = página sem imagem relevante (vetor puro).
+    """
+    imgs = pdf_inner_images(path, page)
+    if not imgs:
+        return None
+    w_pt, h_pt = pdf_page_size(path, page)
+    box_w, box_h = vector_render_box(w_pt, h_pt, cw, ch, auto_rotate)
+    if fit_mode == "stretch":
+        sx, sy = box_w / w_pt, box_h / h_pt
+    else:
+        pick = max if fit_mode == "fill" else min
+        sx = sy = pick(box_w / w_pt, box_h / h_pt)
+    return min(min(px_w / (bw * sx), px_h / (bh * sy))
+               for px_w, px_h, bw, bh in imgs)
 
 
 def rasterize_pdf(path: str, page: int, box_w: int, box_h: int,
@@ -527,12 +706,15 @@ def open_source(path: str, box_w: int = 0, box_h: int = 0, page: int = 0,
             box_w = box_h = 1000  # tamanho de cortesia para inspeção/miniatura
         else:
             w_pt, h_pt = pdf_page_size(path, page)
-            box_w, box_h = pdf_render_box(w_pt, h_pt, box_w, box_h, auto_rotate)
+            box_w, box_h = vector_render_box(w_pt, h_pt, box_w, box_h, auto_rotate)
         return rasterize_pdf(path, page, box_w, box_h, fit_mode)
     if is_svg(path):
         if box_w <= 0 or box_h <= 0:
             box_w = box_h = 1000  # tamanho de cortesia para inspeção/miniatura
-        return rasterize_svg(path, box_w, box_h)
+        else:
+            iw, ih = svg_intrinsic_size(path)
+            box_w, box_h = vector_render_box(iw, ih, box_w, box_h, auto_rotate)
+        return rasterize_svg(path, box_w, box_h, fit_mode)
     return Image.open(path).convert("RGBA")
 
 
@@ -642,7 +824,7 @@ class LayoutConfig:
         "bg_color", "fit_mode",
         "auto_rotate", "cut_lines", "cut_color", "cut_width_px", "cut_style",
         "cut_dash", "output_format", "output_prefix", "output_suffix",
-        "pdf_compression", "jpeg_quality",
+        "pdf_compression", "jpeg_quality", "webp_compression",
     )
 
     def __init__(self):
@@ -668,7 +850,8 @@ class LayoutConfig:
         self.output_prefix:     str   = "folha_"
         self.output_suffix:     str   = ""
         self.pdf_compression:   str   = "lossless"     # DEC-014: sem perda é o padrão
-        self.jpeg_quality:      int   = 95             # serve ao JPEG e ao PDF-JPEG
+        self.jpeg_quality:      int   = 95             # serve ao JPEG, PDF-JPEG, WebP com perda e AVIF
+        self.webp_compression:  str   = "lossless"
         # Pastas independentes: abrir imagens não mexe em onde salvar.
         self.input_dir:         str   = str(Path.home())
         self.output_dir:        str   = default_output_dir()
@@ -692,6 +875,11 @@ class LayoutConfig:
         self.jpeg_quality = clamp_jpeg_quality(self.jpeg_quality, self.jpeg_quality)
         if self.pdf_compression not in PDF_COMP_KEYS:
             self.pdf_compression = "lossless"
+        if self.webp_compression not in WEBP_COMP_KEYS:
+            self.webp_compression = "lossless"
+        # Preset com AVIF aberto numa máquina que não grava AVIF: volta ao padrão.
+        if self.output_format not in OUT_FORMATS:
+            self.output_format = "PNG"
 
     def preset_dict(self) -> dict:
         """Só os campos de layout — um preset não carrega caminhos de pasta."""
@@ -933,14 +1121,27 @@ class ImpositionEngine:
 
         Retorna {'level': 'ok'|'warn'|'bad'|'none', 'ratio': float, 'worst': str,
                  'cell': (w,h), 'needed': (w,h)}.
-        SVG e PDF são ignorados: rasterizam na resolução da célula, então nunca dão
-        upscale. (Limite: PDF que só embrulha uma imagem pequena continua pequeno.)
+        SVG é ignorado: rasteriza na resolução da célula, então nunca dá upscale.
+        PDF: o vetor também não, mas as imagens EMBUTIDAS na página ampliam — entram
+        pela pior razão delas (sem `pypdfium2` ou com PDF ilegível o item sai da guarda).
         """
         cw, ch = self.cell_px()
         worst_ratio = None
         worst_name  = ""
 
         for e in self.entries:
+            if is_pdf(e.path):
+                if not PDF_OK:
+                    continue
+                try:
+                    r = pdf_inner_ratio(e.path, e.page_index, cw, ch,
+                                        self.cfg.auto_rotate, self.cfg.fit_mode)
+                except Exception:
+                    continue                  # PDF ilegível nunca derruba a guarda
+                if r is not None and (worst_ratio is None or r < worst_ratio):
+                    worst_ratio = r
+                    worst_name = f"{e.filename} · p. {e.page_index + 1} (imagem interna)"
+                continue
             if is_vector(e.path):
                 continue
             size = e.real_size()
@@ -1134,7 +1335,7 @@ class ImpositionEngine:
     def save(self, pages: List[Image.Image], progress_cb=None) -> List[str]:
         cfg   = self.cfg
         fmt   = cfg.output_format
-        ext   = {"PDF": "pdf", "PNG": "png", "JPEG": "jpg", "TIFF": "tif"}[fmt]
+        ext   = OUT_EXT[fmt]
         saved: List[str] = []
 
         targets = self.output_dirs()
@@ -1177,6 +1378,16 @@ class ImpositionEngine:
                     elif fmt == "TIFF":
                         page.save(fpath, "TIFF", dpi=(cfg.dpi, cfg.dpi),
                                   compression="lzw")
+                    elif fmt == "WEBP":
+                        rgb = page.convert("RGB")
+                        if cfg.webp_compression == "lossy":
+                            rgb.save(fpath, "WEBP",
+                                     quality=clamp_jpeg_quality(cfg.jpeg_quality))
+                        else:
+                            rgb.save(fpath, "WEBP", lossless=True)
+                    elif fmt == "AVIF":
+                        page.convert("RGB").save(
+                            fpath, "AVIF", quality=clamp_jpeg_quality(cfg.jpeg_quality))
                     else:
                         page.save(fpath, "PNG", dpi=(cfg.dpi, cfg.dpi))
                     saved.append(fpath)
@@ -1856,6 +2067,14 @@ class ConfigPanel(ctk.CTkFrame):
             command=lambda _: self._on_output(), width=100)
         self._comp_menu.grid(row=1, column=1, sticky="w", padx=4)
 
+        # Compressão do WebP ocupa a mesma célula da do PDF; só um dos dois aparece.
+        self._wcomp_var = tk.StringVar(
+            value=WEBP_COMP_LABELS[WEBP_COMP_KEYS.index(self.cfg.webp_compression)])
+        self._wcomp_menu = ctk.CTkOptionMenu(
+            f5, variable=self._wcomp_var, values=WEBP_COMP_LABELS,
+            command=lambda _: self._on_output(), width=100)
+        self._wcomp_menu.grid(row=1, column=1, sticky="w", padx=4)
+
         self._q_lbl = ctk.CTkLabel(f5, text="Qualidade (50–100):", anchor="w",
                                    font=ctk.CTkFont(size=11))
         self._q_lbl.grid(row=2, column=0, sticky="w", padx=4, pady=2)
@@ -1898,6 +2117,13 @@ class ConfigPanel(ctk.CTkFrame):
         dir2_entry.bind("<FocusOut>", lambda _: self._on_output())
         ctk.CTkButton(dir2_row, text="…", width=30,
                       command=self._pick_dir2).grid(row=0, column=1, padx=(4, 0))
+        # Aviso de uso (WEBP/AVIF): fica no fim da seção, a coluna é estreita.
+        self._share_lbl = ctk.CTkLabel(
+            f5, text="Para compartilhar — gráficas e impressoras pedem PDF, TIFF, PNG ou JPEG.",
+            anchor="w", justify="left", wraplength=230, text_color="gray60",
+            font=ctk.CTkFont(size=10))
+        self._share_lbl.grid(row=9, column=0, columnspan=2, sticky="w",
+                             padx=4, pady=(6, 0))
         self._sync_output_controls()
 
     # ── Callbacks: grade ─────────────────────────────────────────────────────
@@ -2020,6 +2246,8 @@ class ConfigPanel(ctk.CTkFrame):
         self.cfg.pdf_compression = PDF_COMP_KEYS[
             PDF_COMP_LABELS.index(self._comp_var.get())]
         # Fora de 50–100 é ajustado ao limite e o campo mostra o valor usado.
+        self.cfg.webp_compression = WEBP_COMP_KEYS[
+            WEBP_COMP_LABELS.index(self._wcomp_var.get())]
         self.cfg.jpeg_quality = clamp_jpeg_quality(self._q_var.get(),
                                                    self.cfg.jpeg_quality)
         self._q_var.set(str(self.cfg.jpeg_quality))
@@ -2033,16 +2261,30 @@ class ConfigPanel(ctk.CTkFrame):
             self._on_output_change()
 
     def _sync_output_controls(self):
-        """Mostra «Compressão» só no PDF e «Qualidade» quando há JPEG no caminho
-        (formato JPEG, ou PDF com compressão JPEG). PNG/TIFF não têm controle."""
+        """Mostra «Compressão» no PDF e no WebP, e «Qualidade» quando há perda no
+        caminho (JPEG, PDF-JPEG, WebP com perda, AVIF). PNG/TIFF não têm controle."""
         fmt = self._fmt_var.get()
         is_pdf = fmt == "PDF"
+        is_webp = fmt == "WEBP"
         if is_pdf:
-            self._comp_lbl.grid(); self._comp_menu.grid()
+            self._comp_menu.grid()
         else:
-            self._comp_lbl.grid_remove(); self._comp_menu.grid_remove()
-        jpeg_q = fmt == "JPEG" or (
-            is_pdf and self._comp_var.get() == PDF_COMP_LABELS[1])
+            self._comp_menu.grid_remove()
+        if is_webp:
+            self._wcomp_menu.grid()
+        else:
+            self._wcomp_menu.grid_remove()
+        if is_pdf or is_webp:
+            self._comp_lbl.grid()
+        else:
+            self._comp_lbl.grid_remove()
+        if fmt in SHARE_FORMATS:
+            self._share_lbl.grid()
+        else:
+            self._share_lbl.grid_remove()
+        jpeg_q = fmt in ("JPEG", "AVIF") or (
+            is_pdf and self._comp_var.get() == PDF_COMP_LABELS[1]) or (
+            is_webp and self._wcomp_var.get() == WEBP_COMP_LABELS[1])
         if jpeg_q:
             self._q_lbl.grid(); self._q_entry.grid()
         else:
@@ -2121,6 +2363,7 @@ class ConfigPanel(ctk.CTkFrame):
         self._fmt_var.set(c.output_format)
         self._comp_var.set(PDF_COMP_LABELS[PDF_COMP_KEYS.index(c.pdf_compression)])
         self._q_var.set(str(c.jpeg_quality))
+        self._wcomp_var.set(WEBP_COMP_LABELS[WEBP_COMP_KEYS.index(c.webp_compression)])
         self._sync_output_controls()
         self._pfx_var.set(c.output_prefix); self._sfx_var.set(c.output_suffix)
         self._dir_var.set(c.output_dir); self._dir2_var.set(c.output_dir2)

@@ -1040,7 +1040,7 @@ class MenuAndDialogTests(unittest.TestCase):
         self.assertLessEqual(pi.ConfigPanel.BOTTOM_H, 84)
 
     def test_versao(self):
-        self.assertEqual(pi.VERSION, "1.4.1")
+        self.assertEqual(pi.VERSION, "1.5.0")
 
 
 class StartupErrorTests(unittest.TestCase):
@@ -1195,6 +1195,303 @@ class FrozenGenerationTests(unittest.TestCase):
                       if isinstance(n, ast.FunctionDef) and n.name == "_generate_worker")
         self.assertNotIn("self.cfg", ast.unparse(worker))
         self.assertNotIn("self.img_panel", ast.unparse(worker))
+
+
+class SvgFinalOrientationTests(unittest.TestCase):
+    """SVG rasterizado na orientação final e respeitando o modo de ajuste (wo0009).
+
+    Um stub registra a caixa/escala pedidas ao back-end: roda sem cairosvg/svglib.
+    """
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        # Arte DEITADA: 300×200 (proporção 3:2).
+        self.svg = self.tmp / "deitado.svg"
+        self.svg.write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" '
+            'viewBox="0 0 300 200"><rect width="300" height="200"/></svg>',
+            encoding="utf-8")
+        self.calls = []
+
+        def fake_render(path, out_w, out_h):
+            self.calls.append((out_w, out_h))
+            return Image.new("RGBA", (out_w, out_h), (10, 10, 10, 255))
+
+        p = mock.patch.object(pi, "_svg_backend_render", fake_render)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def _engine(self, **cfg_kw):
+        cfg = pi.LayoutConfig()
+        cfg.cols, cfg.rows, cfg.dpi = 2, 2, 72
+        cfg.paper_w_mm, cfg.paper_h_mm = 100.0, 200.0     # célula em pé
+        for k, v in cfg_kw.items():
+            setattr(cfg, k, v)
+        return pi.ImpositionEngine([pi.ImageEntry(str(self.svg))], cfg)
+
+    def test_proporcao_vem_de_width_height_viewbox_e_unidades(self):
+        def size(markup):
+            f = self.tmp / "t.svg"
+            f.write_text(markup, encoding="utf-8")
+            os.utime(f, (f.stat().st_atime, f.stat().st_mtime + len(markup)))  # fura o cache
+            return pi.svg_intrinsic_size(str(f))
+
+        ns = 'xmlns="http://www.w3.org/2000/svg"'
+        self.assertEqual(size(f'<svg {ns} width="40" height="20"/>'), (40.0, 20.0))
+        w, h = size(f'<svg {ns} width="210mm" height="297mm"/>')
+        self.assertAlmostEqual(w / h, 210 / 297, places=4)
+        w, h = size(f'<svg {ns} width="1in" height="96px"/>')
+        self.assertAlmostEqual(w / h, 1.0, places=4)
+        self.assertEqual(size(f'<svg {ns} viewBox="0 0 50 80"/>'), (50.0, 80.0))
+        # width em % não é medida: cai no viewBox
+        self.assertEqual(size(f'<svg {ns} width="100%" height="100%" viewBox="0 0 30 90"/>'),
+                         (30.0, 90.0))
+
+    def test_sem_medidas_mede_pelo_backend(self):
+        f = self.tmp / "nu.svg"
+        f.write_text('<svg xmlns="http://www.w3.org/2000/svg"/>', encoding="utf-8")
+        with mock.patch.object(pi, "_svg_backend_size", lambda p: (64.0, 32.0)):
+            self.assertEqual(pi.svg_intrinsic_size(str(f)), (64.0, 32.0))
+
+    def test_cache_por_caminho_e_mtime(self):
+        pi.svg_intrinsic_size(str(self.svg))
+        with mock.patch.object(pi, "_svg_backend_size",
+                               side_effect=AssertionError("não devia medir de novo")):
+            self.assertEqual(pi.svg_intrinsic_size(str(self.svg)), (300.0, 200.0))
+
+    def test_auto_rotate_pede_caixa_girada(self):
+        eng = self._engine(auto_rotate=True)
+        cw, ch = eng.cell_px(72)
+        self.assertLess(cw, ch)
+        self.calls.clear()
+        eng.compose_page(0, eng._expand(), override_dpi=72)
+        out_w, out_h = self.calls[-1]
+        # Arte deitada: renderizada deitada, na caixa (ch, cw); depois do giro cabe sem crescer.
+        self.assertLessEqual(out_w, ch + 1)
+        self.assertLessEqual(out_h, cw + 1)
+        self.assertTrue(abs(out_w - ch) <= 1 or abs(out_h - cw) <= 1)
+
+    def test_sem_auto_rotate_usa_a_propria_celula(self):
+        eng = self._engine(auto_rotate=False)
+        cw, ch = eng.cell_px(72)
+        self.calls.clear()
+        eng.compose_page(0, eng._expand(), override_dpi=72)
+        out_w, out_h = self.calls[-1]
+        self.assertLessEqual(out_w, cw + 1)
+        self.assertLessEqual(out_h, ch + 1)
+
+    def test_preencher_cobre_a_caixa_sem_ampliar(self):
+        eng = self._engine(auto_rotate=True, fit_mode="fill")
+        cw, ch = eng.cell_px(72)
+        self.calls.clear()
+        eng.compose_page(0, eng._expand(), override_dpi=72)
+        out_w, out_h = self.calls[-1]
+        # Caixa girada (ch, cw): a escala que COBRE deixa os dois lados >= a caixa...
+        self.assertGreaterEqual(out_w, ch - 1)
+        self.assertGreaterEqual(out_h, cw - 1)
+        # ...e, depois do giro, o `_place_image` cobre a célula com fator ~1 (só recorta).
+        factor = max(cw / out_h, ch / out_w)
+        self.assertAlmostEqual(factor, 1.0, delta=0.02)
+
+    def test_esticar_entrega_o_tamanho_da_caixa(self):
+        img = pi.rasterize_svg(str(self.svg), 120, 400, "stretch")
+        self.assertEqual(img.size, (120, 400))
+        self.assertGreaterEqual(self.calls[-1][1], 400 - 1)     # renderizou cobrindo
+
+    def test_miniatura_nao_quebra(self):
+        e = pi.ImageEntry(str(self.svg))
+        self.assertIsNotNone(e.pil_thumb)
+
+
+def make_pdf_with_images(path: str, size_pt, images):
+    """PDF de 1 página com imagens em posições dadas pelo teste.
+
+    `images`: [(px_w, px_h, x, y, w_pt, h_pt)] — pypdfium2 monta o objeto de imagem.
+    """
+    import pypdfium2 as pdfium
+    doc = pdfium.PdfDocument.new()
+    page = doc.new_page(*size_pt)
+    for px_w, px_h, x, y, w_pt, h_pt in images:
+        obj = pdfium.PdfImage.new(doc)
+        obj.set_bitmap(pdfium.PdfBitmap.from_pil(
+            Image.new("RGB", (px_w, px_h), (200, 30, 30)).convert("RGBA")))
+        obj.set_matrix(pdfium.PdfMatrix().scale(w_pt, h_pt).translate(x, y))
+        page.insert_obj(obj)
+    page.gen_content()
+    doc.save(path)
+
+
+@unittest.skipUnless(pi.PDF_OK, "sem pypdfium2")
+class PdfInnerImageGuardTests(unittest.TestCase):
+    """A guarda de qualidade olha as imagens DENTRO do PDF (wo0009)."""
+
+    A4 = (595.0, 842.0)
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def _report(self, pdf, cols=1, rows=1, dpi=150, **cfg_kw):
+        cfg = pi.LayoutConfig()
+        cfg.cols, cfg.rows, cfg.dpi = cols, rows, dpi
+        for k, v in cfg_kw.items():
+            setattr(cfg, k, v)
+        return pi.ImpositionEngine([pi.ImageEntry(pdf)], cfg).quality_report()
+
+    def _pdf(self, name, size, images):
+        path = str(self.tmp / name)
+        make_pdf_with_images(path, size, images)
+        return path
+
+    def test_imagem_pequena_dentro_do_pdf_da_selo_vermelho(self):
+        pdf = self._pdf("pequena.pdf", self.A4, [(300, 420, 0, 0, 595, 842)])
+        q = self._report(pdf)       # célula A4 a 150 dpi = 1240×1754
+        escala = 1754 / 842
+        # como no raster: vale o pior dos dois eixos (a imagem 300×420 não é 595:842)
+        esperado = min(300 / (595 * escala), 420 / (842 * escala))
+        self.assertAlmostEqual(q["ratio"], esperado, places=4)
+        self.assertEqual(q["level"], "bad")
+        self.assertEqual(q["worst"], "pequena.pdf · p. 1 (imagem interna)")
+
+    def test_imagem_grande_da_selo_verde(self):
+        pdf = self._pdf("grande.pdf", self.A4, [(3000, 4200, 0, 0, 595, 842)])
+        self.assertEqual(self._report(pdf)["level"], "ok")
+
+    def test_logo_abaixo_de_10_por_cento_e_ignorado(self):
+        pdf = self._pdf("logo.pdf", self.A4, [(40, 40, 20, 20, 60, 60)])
+        self.assertEqual(self._report(pdf)["level"], "none")
+
+    def test_pior_imagem_da_pagina_manda(self):
+        pdf = self._pdf("duas.pdf", self.A4, [(3000, 2100, 0, 421, 595, 421),
+                                               (100, 70, 0, 0, 595, 421)])
+        q = self._report(pdf)
+        self.assertEqual(q["level"], "bad")
+        escala = 1754 / 842
+        self.assertAlmostEqual(q["ratio"], min(100 / (595 * escala),
+                                               70 / (421 * escala)), places=4)
+
+    def test_escala_da_celula_inclui_auto_rotate(self):
+        """Página deitada em célula em pé: a escala é a da caixa GIRADA. Errar isso
+        dá selo verde para imagem pequena."""
+        pdf = self._pdf("deitada.pdf", (842.0, 595.0), [(1000, 700, 0, 0, 842, 595)])
+        # Folha A4 a 300 dpi, grade 2×2: célula 1240×1754 (em pé).
+        com = self._report(pdf, cols=2, rows=2, dpi=300, auto_rotate=True)
+        esc_com = min(1754 / 842, 1240 / 595)
+        self.assertAlmostEqual(com["ratio"], min(1000 / (842 * esc_com),
+                                                 700 / (595 * esc_com)), places=4)
+        sem = self._report(pdf, cols=2, rows=2, dpi=300, auto_rotate=False)
+        esc_sem = min(1240 / 842, 1754 / 595)
+        self.assertAlmostEqual(sem["ratio"], min(1000 / (842 * esc_sem),
+                                                 700 / (595 * esc_sem)), places=4)
+
+    def test_modo_preencher_usa_a_escala_que_cobre(self):
+        pdf = self._pdf("fill.pdf", self.A4, [(1000, 1400, 0, 0, 595, 842)])
+        fit = self._report(pdf, cols=2, rows=2, dpi=300, fit_mode="fit")
+        fill = self._report(pdf, cols=2, rows=2, dpi=300, fit_mode="fill")
+        self.assertLessEqual(fill["ratio"], fit["ratio"])
+
+    def test_pdf_ilegivel_nao_derruba_a_guarda(self):
+        ruim = self.tmp / "ruim.pdf"
+        ruim.write_text("isto nao e um pdf")
+        raster = make_image(self.tmp / "p.png", 300, 420)
+        cfg = pi.LayoutConfig()
+        cfg.cols, cfg.rows, cfg.dpi = 1, 1, 300
+        q = pi.ImpositionEngine([pi.ImageEntry(str(ruim)), pi.ImageEntry(raster)],
+                                cfg).quality_report()
+        self.assertEqual(q["worst"], "p.png")      # o raster segue valendo
+        self.assertEqual(q["level"], "bad")
+
+    def test_vetor_puro_continua_fora(self):
+        pdf = self._pdf("vazio.pdf", self.A4, [])
+        self.assertEqual(self._report(pdf)["level"], "none")
+
+
+class SemPdfiumGuardTests(unittest.TestCase):
+    def test_sem_backend_pdf_nada_muda(self):
+        tmp = Path(tempfile.mkdtemp())
+        pdf = tmp / "x.pdf"
+        pdf.write_bytes(b"%PDF-1.4 stub")
+        cfg = pi.LayoutConfig()
+        with mock.patch.object(pi, "PDF_OK", False):
+            q = pi.ImpositionEngine([pi.ImageEntry(str(pdf))], cfg).quality_report()
+        self.assertEqual(q["level"], "none")
+
+
+class WebpAvifOutputTests(unittest.TestCase):
+    """Saída WebP e AVIF, para compartilhar (wo0009)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.src = make_image(self.tmp / "a.png", 600, 800)
+        # Folha com ruído (reprodutível): o gradiente liso comprime a nada sem perda.
+        import random
+        rng = random.Random(7)
+        self.page = Image.frombytes("RGB", (400, 560), rng.randbytes(400 * 560 * 3))
+
+    def _save(self, fmt, **cfg_kw):
+        self._n = getattr(self, "_n", 0) + 1       # pasta nova a cada gravação (sem sufixo _2)
+        cfg = pi.LayoutConfig()
+        cfg.output_format = fmt
+        cfg.output_dir = str(self.tmp / f"{fmt.lower()}{self._n}")
+        for k, v in cfg_kw.items():
+            setattr(cfg, k, v)
+        eng = pi.ImpositionEngine([pi.ImageEntry(self.src)], cfg)
+        return eng.save([self.page, self.page])
+
+    def test_lista_de_formatos_e_sondagem(self):
+        self.assertEqual(pi.OUT_FORMATS[:4], ["PNG", "PDF", "JPEG", "TIFF"])
+        self.assertEqual(pi.build_out_formats(lambda f: True)[-2:], ["WEBP", "AVIF"])
+        # AVIF sem gravação (só leitura): fica fora da lista; WEBP continua.
+        self.assertEqual(pi.build_out_formats(lambda f: f != "AVIF")[4:], ["WEBP"])
+        self.assertEqual(pi.build_out_formats(lambda f: False), ["PNG", "PDF", "JPEG", "TIFF"])
+
+    def test_sondagem_grava_de_verdade(self):
+        """`features.check` verdadeiro não basta: a sonda faz um save real (FIX-002)."""
+        with mock.patch.object(Image.Image, "save", side_effect=OSError("só leitura")):
+            self.assertFalse(pi._probe_can_save("AVIF"))
+
+    def test_cada_formato_grava_reabre_e_tem_o_tamanho_da_folha(self):
+        casos = [("WEBP", {"webp_compression": "lossless"}),
+                 ("WEBP", {"webp_compression": "lossy", "jpeg_quality": 80}),
+                 ("AVIF", {"jpeg_quality": 80})]
+        for fmt, kw in casos:
+            if fmt not in pi.OUT_FORMATS:
+                continue
+            with self.subTest(fmt=fmt, kw=kw):
+                saved = self._save(fmt, **kw)
+                self.assertEqual(len(saved), 2)
+                self.assertTrue(saved[0].endswith(f"folha_001.{fmt.lower()}"))
+                with Image.open(saved[0]) as im:
+                    self.assertEqual(im.size, self.page.size)
+
+    def test_webp_sem_perda_reabre_identico(self):
+        saved = self._save("WEBP", webp_compression="lossless")
+        with Image.open(saved[0]) as im:
+            self.assertEqual(im.convert("RGB").tobytes(), self.page.tobytes())
+
+    def test_webp_com_perda_pesa_menos_que_sem_perda(self):
+        sem = os.path.getsize(self._save("WEBP", webp_compression="lossless")[0])
+        com = os.path.getsize(self._save("WEBP", webp_compression="lossy",
+                                         jpeg_quality=60)[0])
+        self.assertLess(com, sem)
+
+    def test_preset_ida_e_volta_com_webp_compression(self):
+        cfg = pi.LayoutConfig()
+        cfg.output_format, cfg.webp_compression = "WEBP", "lossy"
+        self.assertIn("webp_compression", pi.LayoutConfig.PRESET_FIELDS)
+        novo = pi.LayoutConfig()
+        novo.from_dict(cfg.preset_dict())
+        self.assertEqual((novo.output_format, novo.webp_compression), ("WEBP", "lossy"))
+
+    def test_valores_invalidos_voltam_ao_padrao(self):
+        cfg = pi.LayoutConfig()
+        cfg.from_dict({"webp_compression": "xyz", "output_format": "BMP"})
+        self.assertEqual((cfg.webp_compression, cfg.output_format), ("lossless", "PNG"))
+
+    def test_avif_de_preset_some_se_a_maquina_nao_grava(self):
+        with mock.patch.object(pi, "OUT_FORMATS", ["PNG", "PDF", "JPEG", "TIFF", "WEBP"]):
+            cfg = pi.LayoutConfig()
+            cfg.from_dict({"output_format": "AVIF"})
+            self.assertEqual(cfg.output_format, "PNG")
 
 
 class LauncherTests(unittest.TestCase):

@@ -8,6 +8,22 @@
 
 ---
 
+## [1.5.0] — 2026-11-04
+Formatos para compartilhar, guarda de qualidade dentro do PDF e conserto do SVG (wo0009). A conferência na tela está com o dono.
+
+### Adicionado
+- Saída **WebP** (`Sem perda` ou `Com perda` com qualidade 50–100) e **AVIF** (qualidade 50–100), para compartilhar; nova opção `webp_compression` nos presets. AVIF/WebP só aparecem na lista se o Pillow GRAVA de fato (sonda com `save` em memória, FIX-002); aviso cinza «Para compartilhar — gráficas e impressoras pedem PDF, TIFF, PNG ou JPEG.»
+- A guarda de qualidade olha as **imagens dentro das páginas de PDF** (as que cobrem ≥ 10% da página), com a escala exata do render (Auto-Rotate e modo de ajuste); o selo cita `<arquivo>.pdf · p. N (imagem interna)`. Sem `pypdfium2` ou com PDF ilegível o item fica fora da guarda.
+- 25 testes headless (111 → 136).
+
+### Corrigido
+- SVG saía ampliado com Auto-Rotate (rasterizado na caixa `(cw, ch)` e só depois girado) e no modo Preencher (menor escala + recorte). Agora é rasterizado já na orientação final, com a escala do modo de ajuste (fit/fill/stretch), como o PDF; proporção lida de `width`/`height`/`viewBox`.
+
+### Modificado
+- `vector_render_box` é a regra única da caixa de render de PDF e SVG (`pdf_render_box` ficou como atalho). `VERSION` para 1.5.0; README para a 1.5.
+
+---
+
 ## [1.4.1] — 2026-11-04
 Robustez (wo0008). Itens 1, 2 e 3 das ideias do assistente, mais o guia rápido sem amarrar a uma ferramenta.
 

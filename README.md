@@ -1,4 +1,4 @@
-# 🖨 PrintImposer v1.4
+# 🖨 PrintImposer v1.5
 
 **Imposição de páginas para impressão em massa** — junte dezenas de imagens em folhas prontas para imprimir e cortar.
 
@@ -6,7 +6,7 @@ Você tem vários cards, cartazes ou fotos — feitos no Figma, Canva, Affinity,
 
 - Grade livre de **colunas × linhas** (até 12 × 12), com atalhos prontos (2×2, 2×6, 4×3…)
 - **Guarda de qualidade**: avisa quando a imagem é pequena demais para a célula e vai perder nitidez
-- Saída **PNG** (padrão), **PDF sem perda**, **JPEG** ou **TIFF**, em até **dois destinos** ao mesmo tempo
+- Saída **PNG** (padrão), **PDF sem perda**, **JPEG**, **TIFF** — e **WebP**/**AVIF** para compartilhar —, em até **dois destinos** ao mesmo tempo
 - Entrada PNG, JPEG, TIFF, BMP, WEBP, GIF, **AVIF** — e **PDF**, **SVG** e **HEIC**, quando há o extra instalado
 - **Presets** nomeados e configuração lembrada entre aberturas
 - Atalho `.bat` para abrir com dois cliques, sem janela de console
@@ -61,7 +61,7 @@ Use **`Opções › Criar atalho…`**. O diálogo explica o que o atalho faz e 
 ## 🖥 A janela
 
 ```
-┌ PrintImposer   Arquivo  Opções  Ajuda   v1.4.1 · SVG: … · PDF: … ┐
+┌ PrintImposer   Arquivo  Opções  Ajuda   v1.5.0 · SVG: … · PDF: … ┐
 ├────────────┬──────────────────────────────┬────────────────────────┤
 │ Imagens    │ Grade (colunas × linhas)  ◼◼ │ Preview         ◀  ▶   │
 │            │ ┌ seções recolhíveis ──────┐ │                        │
@@ -144,6 +144,8 @@ Mostra a folha em baixa resolução, com o mesmo cálculo da saída final. Atual
 | **PDF** | **Sem perda** (padrão) ou **JPEG** com qualidade 50–100 | Mandar para gráfica ou imprimir direto — todas as folhas num arquivo. Sem perda tem a mesma qualidade do PNG; JPEG dá arquivo bem menor. |
 | **JPEG** | qualidade 50–100 (padrão 95) | Arquivo menor para compartilhar. |
 | **TIFF** | sempre sem perda (LZW) | Gráfica que pede TIFF; arquivo grande. |
+| **WebP** | **Sem perda** ou **Com perda** com qualidade 50–100 | Compartilhar por mensagem ou e-mail: bem menor que PNG. Não é para gráfica. |
+| **AVIF** | qualidade 50–100 | Ainda menor que WebP; nem todo programa abre. Não é para gráfica. |
 
 O campo «Qualidade» é um só: vale para o JPEG e para o PDF em modo JPEG.
 
@@ -195,7 +197,7 @@ Serve para a maioria, desde que o selo de qualidade esteja verde. Desde a 1.3 o 
 Até a 1.2 o PDF saía comprimido em JPEG por dentro, com perda, sem você escolher. Agora o padrão é sem perda. Para voltar a um arquivo pequeno, escolha **Compressão: JPEG** e ajuste a qualidade.
 
 **Posso usar PDF como entrada?**
-Sim, com o `pypdfium2` (ver *Instalação › PDF*). Duas observações: (1) a página é desenhada no DPI escolhido — para PDF, use **300 DPI**, porque não há fonte pequena limitando e o texto sai mais nítido; (2) a guarda de qualidade não olha dentro do PDF: se a página só embrulha uma **imagem** pequena (alguns geradores web fazem isso), ela continua pequena.
+Sim, com o `pypdfium2` (ver *Instalação › PDF*). Duas observações: (1) a página é desenhada no DPI escolhido — para PDF, use **300 DPI**, porque não há fonte pequena limitando e o texto sai mais nítido; (2) desde a 1.5, a guarda de qualidade **olha as imagens dentro do PDF**: se a página embrulha uma imagem pequena (alguns geradores web fazem isso), o selo avisa como avisaria com um PNG.
 
 **Abri pelo atalho e nada aconteceu.**
 Desde a 1.4.1, se o app falhar ao abrir, ele mostra uma janela com o erro e grava o detalhe em `%USERPROFILE%\.printimposer\last_error.log` — mande esse arquivo junto com a descrição do problema.
@@ -227,4 +229,4 @@ O motor de composição (`ImpositionEngine`) não depende da interface: testes e
 
 ---
 
-*PrintImposer v1.4.1 — uso pessoal/profissional de impressão em massa.*
+*PrintImposer v1.5.0 — uso pessoal/profissional de impressão em massa.*

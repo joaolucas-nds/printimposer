@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PrintImposer v1.4.0
+PrintImposer v1.4.1
 Ferramenta de Imposição de Páginas para Impressão em Massa
 
 Selecione imagens, configure o layout e gere PDFs/PNGs prontos para impressão.
@@ -31,12 +31,23 @@ Novidades da 1.4 (fase F4, etapa 2 — SPEC-F4-etapa2):
   - Entrada PDF via `pypdfium2` (opcional): cada página vira um item da lista
   - A página é rasterizada no tamanho da célula, já na orientação final
     (sem ampliação depois do render); PDF ilegível é pulado com aviso
+
+Novidades da 1.4.1 (robustez):
+  - Erro ao abrir o app grava ~/.printimposer/last_error.log e mostra uma
+    janela, mesmo com o atalho .bat (que não tem console)
+  - Barra inferior avisa quando o segundo destino está ligado (âmbar se a
+    pasta não existe ou é temporária)
+  - A geração trabalha sobre cópias da configuração e da lista: mexer nelas
+    durante uma geração longa não mistura folhas
+  - Guia rápido sem amarrar a uma ferramenta de design
 """
 
 import os
 import sys
+import copy
 import math
 import json
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -170,7 +181,7 @@ HEIF_OK: bool = _probe_heif()
 # CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION  = "1.4.0"
+VERSION  = "1.4.1"
 APP_NAME = "PrintImposer"
 MM_TO_INCH = 1.0 / 25.4
 
@@ -254,19 +265,20 @@ MENU_LABELS: Dict[str, str] = {
     "delete_preset": "Excluir…",
     "make_bat":      "Criar atalho…",
     "reset":         "Restaurar configurações padrão",
-    "guide":         "Guia rápido: Figma → impressão",
+    "guide":         "Guia rápido: da arte à impressão",
     "about":         "Sobre o PrintImposer",
 }
 
 # Guia rápido (Ajuda). O README continua sendo a versão longa deste texto.
 QUICK_GUIDE = (
-    "1. No Figma\n"
-    "   Use frames A6 e exporte PNG com pelo menos 1240×1748 px\n"
-    "   (ou SVG, se o cabeçalho do app mostrar um back-end de SVG).\n"
+    "1. Na sua ferramenta (Figma, Canva, Affinity, Photoshop, Corel...)\n"
+    "   Crie as artes no tamanho final (ex.: A6) e exporte em PDF —\n"
+    "   melhor, se o cabeçalho mostrar «PDF: pypdfium2» — ou em PNG com\n"
+    "   pelo menos 1240×1748 px para A6. Fotos do celular entram direto.\n"
     "\n"
     "2. No PrintImposer\n"
-    "   Adicione a pasta com as imagens, escolha a grade 2×2, confira o\n"
-    "   selo de qualidade no rodapé do painel e clique em «Gerar Arquivos».\n"
+    "   Adicione a pasta com as artes, escolha a grade (ex.: 2×2), confira\n"
+    "   o selo de qualidade no rodapé e clique em «Gerar Arquivos».\n"
     "\n"
     "3. Na impressora\n"
     "   Escolha «Tamanho real» / 100%. Nunca «ajustar à página»: isso\n"
@@ -687,6 +699,62 @@ class LayoutConfig:
 
     def nup(self) -> int:
         return max(1, self.cols) * max(1, self.rows)
+
+
+def snapshot_for_generation(entries: List["ImageEntry"],
+                            cfg: LayoutConfig) -> Tuple[List["ImageEntry"], LayoutConfig]:
+    """Cópias independentes da lista e da configuração para uma geração.
+
+    Geração roda em thread por minutos; o dono pode mexer em papel, grade ou
+    lista nesse meio-tempo. Com o motor lendo o `cfg` vivo, as folhas saíam
+    com tamanhos misturados. O preview continua no `cfg` vivo. A cópia da
+    entrada é rasa de propósito: path, página e quantidade são valores, e a
+    miniatura (imutável na prática) não precisa ser duplicada.
+    """
+    frozen = LayoutConfig()
+    frozen.from_dict(cfg.to_dict())
+    return [copy.copy(e) for e in entries], frozen
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AVISO DO SEGUNDO DESTINO
+# ══════════════════════════════════════════════════════════════════════════════
+
+DEST_NOTICE_MAX = 60          # caracteres do caminho antes de encurtar no meio
+WARN_COLOR      = "#d6a13a"   # âmbar — o mesmo do selo de atenção
+
+
+def shorten_middle(text: str, limit: int = DEST_NOTICE_MAX) -> str:
+    """Encurta no meio com «…» (o fim do caminho é o que identifica a pasta)."""
+    if len(text) <= limit:
+        return text
+    keep = limit - 1
+    head = keep // 2
+    return text[:head] + "…" + text[len(text) - (keep - head):]
+
+
+def _path_inside(path: str, parent: str) -> bool:
+    """True se `path` é `parent` ou está debaixo dele (sem diferenciar caixa no Windows)."""
+    try:
+        p = os.path.normcase(str(Path(path).resolve()))
+        q = os.path.normcase(str(Path(parent).resolve())).rstrip("\\/")
+    except Exception:
+        return False
+    return p == q or p.startswith(q + os.sep)
+
+
+def second_dest_notice(cfg: LayoutConfig) -> Tuple[bool, str, str]:
+    """(mostrar, texto, nível) do aviso «Também grava em: …» da barra inferior.
+
+    Nível «warn» (âmbar): pasta inexistente ou dentro da pasta temporária — o
+    segundo destino já ficou ligado dias numa pasta de teste sem ninguém ver.
+    """
+    path = (cfg.output_dir2 or "").strip()
+    if not (cfg.output_dir2_on and path):
+        return False, "", "normal"
+    text = f"Também grava em: {shorten_middle(path)}"
+    warn = (not Path(path).is_dir()) or _path_inside(path, tempfile.gettempdir())
+    return True, text, "warn" if warn else "normal"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1546,10 +1614,11 @@ class ConfigPanel(ctk.CTkFrame):
 
     def __init__(self, master, cfg: LayoutConfig, on_change,
                  sections_open: Optional[Dict[str, bool]] = None,
-                 on_sections_change=None, **kw):
+                 on_sections_change=None, on_output_change=None, **kw):
         super().__init__(master, **kw)
         self.cfg       = cfg
         self.on_change = on_change
+        self._on_output_change = on_output_change   # avisa o app (aviso do 2º destino)
         self.presets   = SettingsStore.load_presets()
         self._sections_state     = normalize_sections_open(sections_open)
         self._on_sections_change = on_sections_change
@@ -1823,8 +1892,10 @@ class ConfigPanel(ctk.CTkFrame):
         dir2_row.grid(row=8, column=0, columnspan=2, sticky="ew", padx=4)
         dir2_row.columnconfigure(0, weight=1)
         self._dir2_var = tk.StringVar(value=self.cfg.output_dir2)
-        ctk.CTkEntry(dir2_row, textvariable=self._dir2_var,
-                     font=ctk.CTkFont(size=10)).grid(row=0, column=0, sticky="ew")
+        dir2_entry = ctk.CTkEntry(dir2_row, textvariable=self._dir2_var,
+                                  font=ctk.CTkFont(size=10))
+        dir2_entry.grid(row=0, column=0, sticky="ew")
+        dir2_entry.bind("<FocusOut>", lambda _: self._on_output())
         ctk.CTkButton(dir2_row, text="…", width=30,
                       command=self._pick_dir2).grid(row=0, column=1, padx=(4, 0))
         self._sync_output_controls()
@@ -1958,6 +2029,8 @@ class ConfigPanel(ctk.CTkFrame):
         self.cfg.output_dir     = self._dir_var.get()
         self.cfg.output_dir2    = self._dir2_var.get()
         self.cfg.output_dir2_on = self._dir2_on_var.get()
+        if self._on_output_change:
+            self._on_output_change()
 
     def _sync_output_controls(self):
         """Mostra «Compressão» só no PDF e «Qualidade» quando há JPEG no caminho
@@ -2325,6 +2398,7 @@ class PrintImposerApp(ctk.CTk):
         cfg_outer = tk.Frame(self._right_pane, bg="#2a2a3a")
         cfg_outer.rowconfigure(0, weight=1); cfg_outer.columnconfigure(0, weight=1)
         self.cfg_panel = ConfigPanel(cfg_outer, self.cfg, on_change=self._on_change,
+                                     on_output_change=self._refresh_dest_notice,
                                      sections_open=self._sections_open)
         self.cfg_panel.grid(row=0, column=0, sticky="nsew")
         self._right_pane.add(cfg_outer, minsize=300)
@@ -2355,6 +2429,13 @@ class PrintImposerApp(ctk.CTk):
         self._status_var = tk.StringVar(value="Pronto")
         ctk.CTkLabel(bottom, textvariable=self._status_var, font=ctk.CTkFont(size=10),
                      text_color=("gray50", "gray60")).grid(row=0, column=2, padx=12)
+
+        # Aviso do segundo destino: só aparece com ele ligado (ver second_dest_notice).
+        self._dest_var = tk.StringVar(value="")
+        self._dest_lbl = ctk.CTkLabel(bottom, textvariable=self._dest_var,
+                                      font=ctk.CTkFont(size=10))
+        self._dest_lbl.grid(row=0, column=3, padx=(0, 12))
+        self._refresh_dest_notice()
 
         self._build_menus()
         self._bind_shortcuts()
@@ -2455,7 +2536,7 @@ class PrintImposerApp(ctk.CTk):
 
     def _show_guide(self):
         win = ctk.CTkToplevel(self)
-        win.title("Guia rápido: Figma → impressão")
+        win.title(MENU_LABELS["guide"])
         win.geometry("520x380")
         win.transient(self)
         box = ctk.CTkTextbox(win, wrap="word", font=ctk.CTkFont(size=12))
@@ -2503,6 +2584,19 @@ class PrintImposerApp(ctk.CTk):
                       command=win.destroy).pack(side="left", padx=4)
         # CTkToplevel ainda não está mapeado aqui: grab_set antes falha no Windows.
         win.after(150, lambda: (win.winfo_exists() and (win.grab_set(), win.focus())))
+
+    def _refresh_dest_notice(self):
+        """Atualiza o «Também grava em: …» da barra inferior."""
+        if not hasattr(self, "_dest_lbl"):
+            return   # painel de config avisa durante a montagem, antes da barra existir
+        show, text, level = second_dest_notice(self.cfg)
+        if not show:
+            self._dest_lbl.grid_remove()
+            return
+        self._dest_var.set(text)
+        self._dest_lbl.configure(
+            text_color=WARN_COLOR if level == "warn" else ("gray50", "gray60"))
+        self._dest_lbl.grid()
 
     # ── Reatividade ──────────────────────────────────────────────────────────
 
@@ -2587,8 +2681,12 @@ class PrintImposerApp(ctk.CTk):
         if not self.cfg.output_dir:
             self.cfg.output_dir = default_output_dir()
 
+        # Cópias congeladas: guarda de qualidade e geração veem o mesmo estado,
+        # mesmo que o dono mexa na tela enquanto a thread trabalha.
+        entries, cfg = snapshot_for_generation(self.img_panel.entries, self.cfg)
+
         # Aviso honesto antes de gastar tempo gerando algo que vai sair ruim.
-        q = ImpositionEngine(self.img_panel.entries, self.cfg).quality_report()
+        q = ImpositionEngine(entries, cfg).quality_report()
         if q["level"] == "bad":
             cw, ch = q["cell"]
             if not messagebox.askyesno(
@@ -2602,11 +2700,12 @@ class PrintImposerApp(ctk.CTk):
         self._gen_btn.configure(state="disabled", text="Gerando…")
         self._prog_var.set(0)
         self._status_var.set("Iniciando geração…")
-        threading.Thread(target=self._generate_worker, daemon=True).start()
+        threading.Thread(target=self._generate_worker, args=(entries, cfg),
+                         daemon=True).start()
 
-    def _generate_worker(self):
+    def _generate_worker(self, entries: List[ImageEntry], cfg: LayoutConfig):
         try:
-            engine = ImpositionEngine(self.img_panel.entries, self.cfg)
+            engine = ImpositionEngine(entries, cfg)
 
             def prog_compose(done, total):
                 self.after(0, lambda: self._prog_var.set((done / total) * 0.7))
@@ -2692,10 +2791,76 @@ def enable_dpi_awareness():
             pass  # segue sem DPI awareness: degradação aceitável
 
 
+def _show_startup_error(summary: str, log: Optional[Path]):
+    """Janela de erro que não depende da janela que falhou.
+
+    `Tk()` novo e escondido; se o próprio Tk caiu, `MessageBoxW` no Windows;
+    se nada disso der, sobra o log.
+    """
+    title = f"{APP_NAME} — erro ao abrir"
+    msg = f"O {APP_NAME} não conseguiu abrir.\n\n{summary}"
+    if log:
+        msg += f"\n\nDetalhes em:\n{log}"
+    try:
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            messagebox.showerror(title, msg, parent=root)
+        finally:
+            root.destroy()
+        return
+    except Exception:
+        pass
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, msg, title, 0x10)   # MB_ICONERROR
+        except Exception:
+            pass
+
+
+def report_startup_error(exc: BaseException, notify=None) -> Optional[Path]:
+    """Grava `last_error.log` e avisa o dono. Devolve o caminho do log (ou None).
+
+    Via `.bat` (pythonw) não há console: sem isto o app simplesmente não abre
+    e ninguém sabe por quê. O log cai em `SettingsStore.DIR`; se a pasta não
+    puder ser criada, na pasta temporária do sistema. `notify(resumo, log)` é
+    injetável para o teste não abrir janela.
+    """
+    import traceback, datetime
+    tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    body = (f"Data/hora: {datetime.datetime.now().isoformat(timespec='seconds')}\n"
+            f"Versão: {VERSION}\n"
+            f"Python: {sys.version}\n"
+            f"Executável: {sys.executable}\n\n{tb}")
+    log: Optional[Path] = None
+    for folder in (SettingsStore.DIR, Path(tempfile.gettempdir())):
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            candidate = folder / "last_error.log"
+            candidate.write_text(body, encoding="utf-8")
+            log = candidate
+            break
+        except Exception:
+            continue
+    lines = tb.strip().splitlines()
+    summary = lines[-1] if lines else repr(exc)
+    try:
+        (notify or _show_startup_error)(summary, log)
+    except Exception:
+        pass   # relatar o erro nunca pode virar outro erro
+    return log
+
+
 def main():
-    enable_dpi_awareness()
-    app = PrintImposerApp()
-    app.mainloop()
+    # Exception, não BaseException: fechar a janela ou Ctrl+C não é erro.
+    try:
+        enable_dpi_awareness()
+        app = PrintImposerApp()
+        app.mainloop()
+    except Exception as exc:
+        report_startup_error(exc)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

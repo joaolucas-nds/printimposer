@@ -8,6 +8,23 @@
 
 ---
 
+## [1.4.1] — 2026-11-04
+Robustez (wo0008). Itens 1, 2 e 3 das ideias do assistente, mais o guia rápido sem amarrar a uma ferramenta.
+
+### Adicionado
+- Erro ao abrir o app (inclusive via `.bat`/`pythonw`, sem console) grava `~/.printimposer/last_error.log` (data/hora, versão, Python, executável e traceback; cai na pasta temporária se a pasta do app não puder ser criada) e mostra uma janela de erro. `main()` captura `Exception` (não `BaseException`) e sai com código 1.
+- Aviso «Também grava em: …» na barra inferior enquanto o segundo destino está ligado; âmbar se a pasta não existe ou está dentro da pasta temporária. Atualiza ao marcar/desmarcar, ao escolher pela «…» e ao sair do campo.
+- 11 testes headless (100 → 111).
+
+### Corrigido
+- Configuração e lista mudadas durante uma geração longa podiam misturar folhas (papel/grade/quantidade): a geração agora trabalha sobre cópias feitas antes da thread; o preview segue o `cfg` vivo.
+
+### Modificado
+- Guia rápido («Ajuda › Guia rápido: da arte à impressão») e README sem amarrar a uma ferramenta de design; README atualizado para a 1.4.
+- `VERSION` para 1.4.1. Tags anotadas `v1.0.0` … `v1.4.0` nos últimos commits de cada versão.
+
+---
+
 ## [1.4.0] — 2026-11-04
 Fase F4, etapa 2 (SPEC-F4-etapa2). Implementada pelo Code (wo0007); a conferência na tela e com um PDF do Figma está com o dono.
 

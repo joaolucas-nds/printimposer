@@ -36,18 +36,6 @@ Pergunta do dono. **Leitura do chat:** para **imprimir**, não agrega — impres
 
 ## 🤖 Ideias Ativas — Assistente
 
-### 2026-07-19 — Aviso quando `pythonw` engole o traceback
-O smoke mostrou que, via `.bat` com `pythonw`, uma falha na abertura é **100% silenciosa**: duplo clique e nada acontece. Vale um `try/except` no `main()` que grave o traceback em `~/.printimposer/last_error.log` e mostre uma janela de erro — assim o usuário vê o erro mesmo sem console. **Entra na 1.4.1 (robustez).**
-
-### 2026-07-19 — Congelar o `LayoutConfig` durante a geração
-FIX-004 tirou a mutação, mas o engine ainda **lê** o `cfg` vivo enquanto compõe: mudar o papel no meio de uma geração longa ainda produziria folhas com geometrias diferentes na mesma leva. Uma cópia no início de `generate_all` fecharia isso de vez. **Entra na 1.4.1 (robustez).**
-
-### 2026-11-04 — Aviso visível do segundo destino
-O segundo destino ficou ligado, apontando para uma pasta temporária do Claude Code, por dias, sem o dono perceber — a caixa fica dentro da seção Saída, que pode estar fechada. Mostrar na barra inferior, enquanto estiver ligado, «Também grava em: …», em âmbar se a pasta não existir ou estiver numa pasta temporária. **Entra na 1.4.1 (robustez).**
-
-### 2026-11-04 — Tags de versão no git
-Marcar cada versão entregue (`v1.0.0` … `v1.4.0`) com uma tag no commit em que ela fechou. Custa um comando por versão e permite voltar a qualquer versão sem procurar no log. **Entra na wo0008.**
-
 ### 2026-11-04 — Guarda de qualidade para PDF com imagem raster dentro
 Visto nos PDFs reais do dono (gerados por jsPDF): a página tem imagens **JPEG embutidas** (`/DCTDecode` = 4 no PDF A4 de 4 páginas). A guarda ignora PDF porque «vetor não amplia» — mas a imagem de dentro amplia. Possível: ler as imagens da página (o `pypdfium2` enumera objetos) e calcular a resolução efetiva delas na célula, com o mesmo selo. **Volta quando** a etapa 4 da F4 (marcas e sangria) estiver fechada, ou antes, se um PDF de entrada sair borrado.
 
@@ -131,6 +119,10 @@ Executável Windows para quem não tem Python. **F5.**
 
 ## ✅ Concluídas
 > Ideia que virou realidade. Mantida aqui para histórico (com referência à versão/decisão).
+- **Erro de abertura visível mesmo via `.bat`** *(assistente, 2026-07-19)* — implementado na 1.4.1: janela de erro + `~/.printimposer/last_error.log`.
+- **Configuração congelada durante a geração** *(assistente, 2026-07-19)* — implementado na 1.4.1: a geração trabalha sobre cópias do `LayoutConfig` e da lista.
+- **Aviso visível do segundo destino** *(assistente, 2026-11-04)* — implementado na 1.4.1: «Também grava em: …» na barra inferior, em âmbar para pasta inexistente ou temporária.
+- **Tags de versão no git** *(assistente, 2026-11-04)* — criadas na wo0008 (`v1.1.1` … `v1.4.1`).
 - **Entrada PDF** *(assistente, 2026-07-18)* — implementada na 1.4.0 (F4 etapa 2), via `pypdfium2` opcional; uma página por item, rasterizada já na orientação final (`meta/specs/261104-SPEC-F4-etapa2.md`).
 - **Compressão configurável na saída** *(usuário, 2026-06)* — implementada na 1.3.0: PDF sem perda por padrão (DEC-014) ou JPEG com qualidade 50–100; medido em 03/11 que o PDF antigo era JPEG por dentro.
 - **Espaçamento por eixo (X/Y)** *(usuário, 2026-06)* — implementado na 1.3.0, compatível com presets antigos.

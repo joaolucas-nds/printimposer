@@ -1,13 +1,13 @@
-# 🖨 PrintImposer v1.3
+# 🖨 PrintImposer v1.4
 
 **Imposição de páginas para impressão em massa** — junte dezenas de imagens em folhas prontas para imprimir e cortar.
 
-Você tem vários cards (por exemplo, A6 exportados do Figma) e quer imprimi-los quatro por folha A4, sem arrastar arquivo por arquivo no diálogo de impressão. O PrintImposer faz isso em três passos: **escolha a grade → adicione as imagens → gere**.
+Você tem vários cards, cartazes ou fotos — feitos no Figma, Canva, Affinity, Photoshop, Corel, num gerador web, ou tirados do celular — e quer imprimi-los, por exemplo, quatro por folha A4, sem arrastar arquivo por arquivo no diálogo de impressão. O PrintImposer faz isso em três passos: **escolha a grade → adicione as imagens → gere**.
 
 - Grade livre de **colunas × linhas** (até 12 × 12), com atalhos prontos (2×2, 2×6, 4×3…)
 - **Guarda de qualidade**: avisa quando a imagem é pequena demais para a célula e vai perder nitidez
 - Saída **PNG** (padrão), **PDF sem perda**, **JPEG** ou **TIFF**, em até **dois destinos** ao mesmo tempo
-- Entrada PNG, JPEG, TIFF, BMP, WEBP, GIF, **AVIF** — e **SVG** e **HEIC**, quando há o extra instalado
+- Entrada PNG, JPEG, TIFF, BMP, WEBP, GIF, **AVIF** — e **PDF**, **SVG** e **HEIC**, quando há o extra instalado
 - **Presets** nomeados e configuração lembrada entre aberturas
 - Atalho `.bat` para abrir com dois cliques, sem janela de console
 
@@ -35,6 +35,15 @@ pip install svglib rlPyCairo
 
 No Windows, nenhum dos dois é 100% Python na hora de desenhar: o `cairosvg` precisa da biblioteca nativa **libcairo**, e o `svglib` precisa do `rlPyCairo`. O app testa se o back-end **desenha de verdade** antes de ligar o recurso. O cabeçalho mostra o resultado: `SVG: cairosvg`, `SVG: svglib` ou `SVG: indisponível`. Indisponível, o `.svg` simplesmente não aparece no seletor — nada quebra.
 
+### PDF (opcional)
+Para aceitar `.pdf` como entrada (o export vetorial de Figma, Affinity, Illustrator, Canva e afins):
+
+```
+python -m pip install pypdfium2
+```
+
+Cada **página** do PDF vira um item da lista (`arquivo.pdf · p. 2/5`) e é desenhada já no tamanho e na orientação da célula — sem ampliação. PDF com senha ou corrompido é pulado, com aviso. Sem o pacote, o cabeçalho diz `PDF: indisponível` e o `.pdf` não aparece no seletor.
+
 ### HEIC (opcional)
 Fotos de iPhone em `.heic`/`.heif` entram com:
 
@@ -52,7 +61,7 @@ Use **`Opções › Criar atalho…`**. O diálogo explica o que o atalho faz e 
 ## 🖥 A janela
 
 ```
-┌ PrintImposer   Arquivo  Opções  Ajuda              v1.3.0 · SVG: … ┐
+┌ PrintImposer   Arquivo  Opções  Ajuda   v1.4.1 · SVG: … · PDF: … ┐
 ├────────────┬──────────────────────────────┬────────────────────────┤
 │ Imagens    │ Grade (colunas × linhas)  ◼◼ │ Preview         ◀  ▶   │
 │            │ ┌ seções recolhíveis ──────┐ │                        │
@@ -108,7 +117,7 @@ Qualquer outra combinação até 12 × 12 funciona sem cadastro.
 | **Ajuste da imagem** | *Ajustar (fit)* — imagem inteira, pode sobrar borda na cor de fundo · *Preencher (fill)* — preenche e recorta o excesso · *Esticar (stretch)* — força o tamanho, pode distorcer. **Auto-Rotate** gira a imagem quando a orientação dela não bate com a da célula. |
 | **Margens e espaçamento** | Margem externa; espaço **entre colunas** e **entre linhas**, separados, em mm; cor de fundo das áreas vazias. |
 | **Linhas de corte** | Sólida, tracejada ou pontilhada; espessura em px, tamanho do traço e cor. As linhas atravessam a folha entre as colunas e linhas. |
-| **Saída** | Formato, **compressão/qualidade** (quando o formato tem), prefixo, sufixo, pasta de saída e, se quiser, **uma cópia em outro destino**. |
+| **Saída** | Formato, **compressão/qualidade** (quando o formato tem), prefixo, sufixo, pasta de saída e, se quiser, **uma cópia em outro destino** — enquanto ela estiver ligada, a barra inferior avisa «Também grava em: …». |
 
 ### Guarda de qualidade (rodapé)
 A folha é montada no DPI escolhido. Se a imagem tem menos pixels que a célula, ela é **ampliada** — e perde nitidez na impressão. O selo compara a pior imagem da lista com a célula:
@@ -146,21 +155,22 @@ O campo «Qualidade» é um só: vale para o JPEG e para o PDF em modo JPEG.
 |---|---|
 | **Arquivo** | Adicionar arquivos… `Ctrl+O` · Adicionar pasta… `Ctrl+Shift+O` · Limpar lista · Gerar arquivos `Ctrl+G` · Abrir pasta de saída · Sair `Alt+F4` |
 | **Opções** | **Presets ▸** (lista os salvos, *Salvar atual…*, *Excluir…*) · **Criar atalho…** · **Restaurar configurações padrão** |
-| **Ajuda** | Guia rápido: Figma → impressão · Sobre o PrintImposer (versão, back-end de SVG, onde ficam as configurações) |
+| **Ajuda** | Guia rápido: da arte à impressão · Sobre o PrintImposer (versão, extras disponíveis, onde ficam as configurações) |
 
 - **Presets** guardam o layout — grade, papel, DPI, ajuste, margens e espaçamentos, corte, formato, compressão e qualidade. Não guardam pastas: pasta é da máquina, não do layout. Presets da 1.2 (com um espaçamento só) abrem com o mesmo valor nos dois campos.
 - **Restaurar configurações padrão** volta o layout ao padrão e mantém as suas pastas.
 
 ---
 
-## 🎯 Do Figma à impressora — cards A6, quatro por folha A4
+## 🎯 Da arte à impressora — cards A6, quatro por folha A4
 
-1. **No Figma**
-   - Crie os cards em frames A6 (105 × 148 mm).
-   - Exporte PNG com **pelo menos 1240 × 1748 px** — confira o tamanho em pixels, não só a escala do export.
-   - Quer guia de corte desenhado na arte? Uma borda fina no frame funciona; aí deixe as linhas de corte do app desligadas.
+1. **Na sua ferramenta** (Figma, Canva, Affinity, Photoshop, Corel, um gerador web…)
+   - Crie os cards no tamanho A6 (105 × 148 mm).
+   - Exporte **PDF** (melhor: o texto e os traços saem vetoriais — precisa do `pypdfium2`) ou **PNG com pelo menos 1240 × 1748 px** — confira o tamanho em pixels, não só a escala do export.
+   - Quer guia de corte desenhado na arte? Uma borda fina na prancheta funciona; aí deixe as linhas de corte do app desligadas.
+   - **Fotos do celular** entram direto (JPEG, AVIF, e HEIC com o extra).
 2. **No PrintImposer**
-   - **+ Pasta** → a pasta com os PNGs.
+   - **+ Pasta** → a pasta com as artes.
    - Grade **2 × 2** (atalho «4 por folha»), papel **A4**, **300 DPI**.
    - Ajuste **Ajustar (fit)** com **Auto-Rotate** ligado.
    - Margem externa **0** (ou **5 mm** se a impressora não imprime até a borda) e **0** entre colunas e entre linhas.
@@ -179,10 +189,16 @@ Sim, de propósito: as células sem imagem ficam na cor de fundo. A folha contin
 Pode. Use *Ajustar (fit)* para manter a proporção de cada uma e deixe o Auto-Rotate ligado.
 
 **O PDF serve para gráfica?**
-Serve para a maioria, desde que o selo de qualidade esteja verde. Desde a 1.3 o PDF sai **sem perda** por padrão — a mesma qualidade do PNG, num arquivo só. Ele é **rasterizado** no DPI escolhido (uma imagem por página, não vetor). Se a gráfica exige PDF vetorial, exporte direto do Figma.
+Serve para a maioria, desde que o selo de qualidade esteja verde. Desde a 1.3 o PDF sai **sem perda** por padrão — a mesma qualidade do PNG, num arquivo só. Ele é **rasterizado** no DPI escolhido (uma imagem por página, não vetor). Se a gráfica exige PDF vetorial, mande o PDF exportado direto da sua ferramenta.
 
 **Por que o PDF ficou maior que antes?**
 Até a 1.2 o PDF saía comprimido em JPEG por dentro, com perda, sem você escolher. Agora o padrão é sem perda. Para voltar a um arquivo pequeno, escolha **Compressão: JPEG** e ajuste a qualidade.
+
+**Posso usar PDF como entrada?**
+Sim, com o `pypdfium2` (ver *Instalação › PDF*). Duas observações: (1) a página é desenhada no DPI escolhido — para PDF, use **300 DPI**, porque não há fonte pequena limitando e o texto sai mais nítido; (2) a guarda de qualidade não olha dentro do PDF: se a página só embrulha uma **imagem** pequena (alguns geradores web fazem isso), ela continua pequena.
+
+**Abri pelo atalho e nada aconteceu.**
+Desde a 1.4.1, se o app falhar ao abrir, ele mostra uma janela com o erro e grava o detalhe em `%USERPROFILE%\.printimposer\last_error.log` — mande esse arquivo junto com a descrição do problema.
 
 **Posso usar SVG?**
 Sim, com um back-end instalado (ver *Instalação › SVG*). O SVG é desenhado já no tamanho da célula, sem perda.
@@ -211,4 +227,4 @@ O motor de composição (`ImpositionEngine`) não depende da interface: testes e
 
 ---
 
-*PrintImposer v1.3.0 — uso pessoal/profissional de impressão em massa.*
+*PrintImposer v1.4.1 — uso pessoal/profissional de impressão em massa.*

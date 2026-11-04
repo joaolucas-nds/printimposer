@@ -972,7 +972,7 @@ class MenuAndDialogTests(unittest.TestCase):
                     "Gerar arquivos", "Abrir pasta de saída", "Sair"],
         "Opções":  ["Presets", "Salvar atual…", "Excluir…", "Criar atalho…",
                     "Restaurar configurações padrão"],
-        "Ajuda":   ["Guia rápido: Figma → impressão", "Sobre o PrintImposer"],
+        "Ajuda":   ["Guia rápido: da arte à impressão", "Sobre o PrintImposer"],
     }
 
     def setUp(self):
@@ -1040,7 +1040,161 @@ class MenuAndDialogTests(unittest.TestCase):
         self.assertLessEqual(pi.ConfigPanel.BOTTOM_H, 84)
 
     def test_versao(self):
-        self.assertEqual(pi.VERSION, "1.4.0")
+        self.assertEqual(pi.VERSION, "1.4.1")
+
+
+class StartupErrorTests(unittest.TestCase):
+    """1.4.1: erro ao abrir deixa rastro e avisa, mesmo via pythonw (sem console)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.exc = None
+        try:
+            raise RuntimeError("falha de teste")
+        except RuntimeError as e:
+            self.exc = e
+
+    def test_grava_log_com_os_campos_e_chama_o_notificador(self):
+        avisos = []
+        with mock.patch.object(pi.SettingsStore, "DIR", self.tmp / "dot"):
+            log = pi.report_startup_error(self.exc, notify=lambda r, p: avisos.append((r, p)))
+        self.assertEqual(log, self.tmp / "dot" / "last_error.log")
+        texto = log.read_text(encoding="utf-8")
+        for campo in ("Data/hora:", f"Versão: {pi.VERSION}", "Python:",
+                      "Executável:", "Traceback", "RuntimeError: falha de teste"):
+            self.assertIn(campo, texto)
+        self.assertEqual(avisos, [("RuntimeError: falha de teste", log)])
+
+    def test_cai_na_pasta_temporaria_quando_a_pasta_nao_pode_ser_criada(self):
+        bloqueio = self.tmp / "arquivo"
+        bloqueio.write_text("x")          # mkdir dentro de um arquivo falha
+        temp = self.tmp / "temp"; temp.mkdir()
+        with mock.patch.object(pi.SettingsStore, "DIR", bloqueio / "dot"), \
+                mock.patch.object(pi.tempfile, "gettempdir", return_value=str(temp)):
+            log = pi.report_startup_error(self.exc, notify=lambda r, p: None)
+        self.assertEqual(log, temp / "last_error.log")
+        self.assertTrue(log.exists())
+
+    def test_notificador_que_falha_nao_vira_outro_erro(self):
+        def quebra(r, p):
+            raise OSError("sem janela")
+        with mock.patch.object(pi.SettingsStore, "DIR", self.tmp / "dot"):
+            log = pi.report_startup_error(self.exc, notify=quebra)
+        self.assertTrue(log.exists())
+
+    def test_main_envolve_o_app_num_try_except_exception(self):
+        src = (Path(__file__).resolve().parent.parent / "print_imposer.py"
+               ).read_text(encoding="utf-8")
+        main = next(n for n in ast.walk(ast.parse(src))
+                    if isinstance(n, ast.FunctionDef) and n.name == "main")
+        tries = [n for n in ast.walk(main) if isinstance(n, ast.Try)]
+        self.assertEqual(len(tries), 1)
+        self.assertEqual([ast.unparse(h.type) for h in tries[0].handlers], ["Exception"])
+        self.assertIn("PrintImposerApp", ast.unparse(tries[0]))
+        self.assertIn("mainloop", ast.unparse(tries[0]))
+
+
+class SecondDestNoticeTests(unittest.TestCase):
+    """1.4.1: aviso «Também grava em» (pura; a UI só desenha o resultado)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.cfg = pi.LayoutConfig()
+
+    def test_desligado_ou_vazio_nao_mostra(self):
+        self.cfg.output_dir2 = str(self.tmp)
+        self.assertFalse(pi.second_dest_notice(self.cfg)[0])
+        self.cfg.output_dir2_on = True
+        self.cfg.output_dir2 = "   "
+        self.assertFalse(pi.second_dest_notice(self.cfg)[0])
+
+    def test_ligado_e_existente_fora_do_temp_e_normal(self):
+        self.cfg.output_dir2_on = True
+        self.cfg.output_dir2 = str(self.tmp)
+        elsewhere = self.tmp / "fakeos_temp"; elsewhere.mkdir()
+        with mock.patch.object(pi.tempfile, "gettempdir", return_value=str(elsewhere)):
+            mostrar, texto, nivel = pi.second_dest_notice(self.cfg)
+        self.assertTrue(mostrar)
+        self.assertEqual(nivel, "normal")
+        self.assertEqual(texto, f"Também grava em: {self.tmp}")
+
+    def test_inexistente_e_ambar(self):
+        self.cfg.output_dir2_on = True
+        self.cfg.output_dir2 = str(self.tmp / "nao" / "existe")
+        self.assertEqual(pi.second_dest_notice(self.cfg)[2], "warn")
+
+    def test_dentro_do_temp_e_ambar(self):
+        self.cfg.output_dir2_on = True
+        self.cfg.output_dir2 = str(self.tmp)
+        with mock.patch.object(pi.tempfile, "gettempdir",
+                               return_value=str(self.tmp.parent)):
+            self.assertEqual(pi.second_dest_notice(self.cfg)[2], "warn")
+
+    def test_encurta_no_meio_passando_do_limite(self):
+        longo = "C:\\" + "a" * 40 + "\\" + "b" * 40 + "\pasta_final"
+        curto = pi.shorten_middle(longo)
+        self.assertEqual(len(curto), pi.DEST_NOTICE_MAX)
+        self.assertIn("…", curto)
+        self.assertTrue(curto.endswith("pasta_final"))
+        self.assertEqual(pi.shorten_middle("curto"), "curto")
+
+
+class FrozenGenerationTests(unittest.TestCase):
+    """1.4.1: mexer na tela durante a geração não mistura folhas."""
+
+    def test_geracao_ignora_mudancas_feitas_no_meio(self):
+        tmp = Path(tempfile.mkdtemp())
+        img = make_image(tmp / "src.png", 300, 420)
+        cfg = pi.LayoutConfig()
+        cfg.dpi = 100; cfg.cols = cfg.rows = 1
+        cfg.output_dir = str(tmp)
+        e = pi.ImageEntry(img); e.quantity = 12
+        entries = [e]
+        esperado = pi.ImpositionEngine(entries, cfg)._page_px()   # A4 @ 100 DPI
+
+        snap_entries, snap_cfg = pi.snapshot_for_generation(entries, cfg)
+        self.assertIsNot(snap_cfg, cfg)
+        self.assertIsNot(snap_entries, entries)
+        self.assertIsNot(snap_entries[0], e)
+
+        primeira, mexeu = threading.Event(), threading.Event()
+
+        def mexer():
+            primeira.wait(5)
+            cfg.paper_key = "A5"; cfg.paper_w_mm, cfg.paper_h_mm = 148.0, 210.0
+            cfg.cols = 2
+            e.quantity = 1
+            entries.clear()
+            mexeu.set()
+
+        def progresso(done, total):
+            if done == 1:
+                primeira.set()
+                mexeu.wait(5)
+
+        t = threading.Thread(target=mexer, daemon=True); t.start()
+        paginas = pi.ImpositionEngine(snap_entries, snap_cfg).generate_all(progresso)
+        t.join(timeout=5)
+
+        self.assertEqual(len(paginas), 12)
+        self.assertEqual({p.size for p in paginas}, {esperado})
+        # o cfg vivo guarda as mudanças; o preview as enxerga
+        self.assertEqual(cfg.paper_key, "A5")
+        self.assertEqual(cfg.cols, 2)
+        self.assertEqual(entries, [])
+
+    def test_start_generate_congela_antes_da_thread(self):
+        src = (Path(__file__).resolve().parent.parent / "print_imposer.py"
+               ).read_text(encoding="utf-8")
+        fn = next(n for n in ast.walk(ast.parse(src))
+                  if isinstance(n, ast.FunctionDef) and n.name == "_start_generate")
+        corpo = ast.unparse(fn)
+        self.assertLess(corpo.index("snapshot_for_generation"), corpo.index("Thread("))
+        self.assertIn("args=(entries, cfg)", corpo)
+        worker = next(n for n in ast.walk(ast.parse(src))
+                      if isinstance(n, ast.FunctionDef) and n.name == "_generate_worker")
+        self.assertNotIn("self.cfg", ast.unparse(worker))
+        self.assertNotIn("self.img_panel", ast.unparse(worker))
 
 
 class LauncherTests(unittest.TestCase):

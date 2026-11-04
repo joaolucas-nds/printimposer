@@ -7,13 +7,13 @@
 ---
 
 ## Versão Atual
-**1.4.0** — 2026-11-04 — F4 etapa 2 **concluída**: entrada PDF via `pypdfium2`, uma página por item, rasterizada na orientação final. Roteiro do dono feito em 04/11 (tudo certo, com os PDFs reais de cartazes). Suíte verde (100 testes; 5 skips de SVG, ou 11 sem `pypdfium2`).
+**1.4.1** — 2026-11-04 — Robustez: erro de abertura visível (`last_error.log` + janela), aviso do segundo destino na barra inferior, configuração congelada durante a geração, guia rápido sem amarrar a uma ferramenta. Suíte verde (111 testes; 5 skips de SVG). Roteiro do dono da 1.4.1 pendente.
 
 ## 🎯 Foco atual
-**Produto:** 1.4.1 de robustez (wo0008) — erro de abertura visível, aviso do segundo destino, configuração congelada durante a geração, guia rápido sem amarrar a uma ferramenta. Depois: portão da imposição vetorial (F4, etapa 3).
+**Produto:** 1.4.1 entregue (wo0008); falta o roteiro do dono. Depois: portão da imposição vetorial (F4, etapa 3).
 **Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013). WO que muda a interface traz o roteiro do dono **no chat** e a linha `/apply-wo` em bloco cercado.
 
-## ✅ Funcionando *(suíte headless verde; roteiro do dono da 1.4.0 em 04/11)*
+## ✅ Funcionando *(suíte headless verde; roteiro do dono da 1.4.0 em 04/11; a 1.4.1 aguarda o roteiro)*
 - Grade livre `cols × rows` até 12×12, com atalhos e miniatura do grid.
 - Lista de imagens com miniatura, quantidade, reordenação; "+ Arquivos" e "+ Pasta".
 - Ajuste fit / fill / stretch + Auto-Rotate.
@@ -29,16 +29,19 @@
 - Menubar `Arquivo · Opções · Ajuda` com `Ctrl+O` / `Ctrl+Shift+O` / `Ctrl+G`; painel em três zonas com accordion e `sections_open` persistido.
 - Presets nomeados (submenu `Opções › Presets`, reconstruído a cada abertura) e persistência de configuração/geometria em `~/.printimposer/`.
 - Gerador de `.bat` (ASCII puro, CRLF, sem console) pelo diálogo `Opções › Criar atalho…`, que abre na pasta-pai do projeto.
-- Preview em tempo real com debounce; geração em thread com progresso.
+- Preview em tempo real com debounce; geração em thread com progresso, sobre cópias congeladas da configuração e da lista (mexer na tela durante a geração não mistura folhas).
+- Erro ao abrir: `~/.printimposer/last_error.log` + janela de erro, mesmo via `.bat`.
+- Barra inferior mostra «Também grava em: …» com o segundo destino ligado (âmbar se inexistente ou temporário).
 
 ## 🔧 Em Progresso
-- 1.4.1 de robustez (wo0008, Parte B).
+- (vazio)
 
 ## ❌ Quebrado / Com Problema
 - **Suspeita, por leitura de código (não medida):** SVG com Auto-Rotate pode sair **ampliado** — é rasterizado na caixa `(cw, ch)` e só depois girado, então arte deitada numa célula em pé é desenhada pequena e esticada. Não se manifesta hoje (SVG indisponível na máquina do dono). O PDF da 1.4.0 já rasteriza na orientação final; o SVG pede um teste com stub e o mesmo conserto. Ver SPEC-F4-etapa2 §3.
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
+- [ ] **Dono:** roteiro da 1.4.1 (no chat da wo0008).
 - [ ] **Chat + dono:** portão da imposição vetorial (F4, etapa 3) — análise com sonda própria.
 - [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho».
 - [ ] **Dono:** apagar as duas pastas temporárias das sondas `pypdfium2` (o classificador nega `rm -r` ao Code). No CMD, um comando de cada vez: `rmdir /s /q "%TEMP%\claude\C--Users-alexk-Tools-PrintImposer-printimposer\fe86a394-080c-4ad1-b60b-c223bc59d98a\scratchpad\pdfium"` e `rmdir /s /q "%TEMP%\claude\C--Users-alexk-Tools-PrintImposer-printimposer\610902cd-2ed1-4042-b35e-173e9707e5c6\scratchpad\pdfium"`.
@@ -52,3 +55,5 @@
 **2026-11-04 (tarde)** — Etapa 2 implementada pelo Code (wo0007, 1.4.0): entrada PDF por `pypdfium2`, página = item, render na orientação final (sem ampliação). Sonda real: página paisagem em célula retrato pediu a caixa (1754, 1240) e saiu 1748×1241. Suspeita do SVG com Auto-Rotate registrada.
 
 **2026-11-04 (noite)** — Roteiro da 1.4.0 feito pelo dono com PDFs reais (tudo certo). Curadoria: IDEAS (10 ideias mudaram de seção, etiquetas de fase corrigidas, «Figma» generalizado), ROADMAP (F4 por etapas, 1.4.1 intercalada), CONTEXT e README sem amarrar a uma ferramenta. Regras corrigidas no CEREBRO: roteiro do dono **no chat**; `/apply-wo` em bloco cercado. Próximo: 1.4.1 de robustez (wo0008).
+
+**2026-11-04 (madrugada)** — Code aplicou a wo0008: commit A de docs (`29bfe23`), tags `v1.0.0`…`v1.4.0` e a 1.4.1 (erro de abertura visível, aviso do 2º destino, config congelada na geração, guia rápido). 100 → 111 testes. Próximo: roteiro do dono.

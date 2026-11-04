@@ -10,7 +10,7 @@
 **1.4.1** — 2026-11-04 — Robustez: erro de abertura visível (`last_error.log` + janela), aviso do segundo destino na barra inferior, configuração congelada durante a geração, guia rápido sem amarrar a uma ferramenta. Suíte verde (111 testes; 5 skips de SVG). Roteiro do dono da 1.4.1 pendente.
 
 ## 🎯 Foco atual
-**Produto:** 1.4.1 entregue (wo0008); falta o roteiro do dono. Depois: portão da imposição vetorial (F4, etapa 3).
+**Produto:** 1.5.0 (wo0009): SVG sem ampliação, guarda de qualidade dentro do PDF, saída WebP e AVIF. Em paralelo: sonda do portão da imposição vetorial (`meta/analises/261104-ANALISE-portao-vetorial.md`).
 **Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013). WO que muda a interface traz o roteiro do dono **no chat** e a linha `/apply-wo` em bloco cercado.
 
 ## ✅ Funcionando *(suíte headless verde; roteiro do dono da 1.4.0 em 04/11; a 1.4.1 aguarda o roteiro)*
@@ -34,17 +34,16 @@
 - Barra inferior mostra «Também grava em: …» com o segundo destino ligado (âmbar se inexistente ou temporário).
 
 ## 🔧 Em Progresso
-- (vazio)
+- 1.5.0 (wo0009, Parte B). Sonda do portão vetorial pedida na análise de 04/11.
 
 ## ❌ Quebrado / Com Problema
-- **Suspeita, por leitura de código (não medida):** SVG com Auto-Rotate pode sair **ampliado** — é rasterizado na caixa `(cw, ch)` e só depois girado, então arte deitada numa célula em pé é desenhada pequena e esticada. Não se manifesta hoje (SVG indisponível na máquina do dono). O PDF da 1.4.0 já rasteriza na orientação final; o SVG pede um teste com stub e o mesmo conserto. Ver SPEC-F4-etapa2 §3.
+- **SVG pode sair ampliado — confirmado por leitura de código em 04/11, não medido em execução:** `open_source` passa a caixa `(cw, ch)` direto para `rasterize_svg`, que ignora o Auto-Rotate e usa sempre a menor escala (no modo Preencher o `_place_image` recorta e amplia). Não se manifesta na máquina do dono (SVG indisponível). Conserto na wo0009.
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
 - [ ] **Dono:** roteiro da 1.4.1 (no chat da wo0008).
 - [ ] **Chat + dono:** portão da imposição vetorial (F4, etapa 3) — análise com sonda própria.
 - [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho».
-- [ ] **Dono:** apagar as duas pastas temporárias das sondas `pypdfium2` (o classificador nega `rm -r` ao Code). No CMD, um comando de cada vez: `rmdir /s /q "%TEMP%\claude\C--Users-alexk-Tools-PrintImposer-printimposer\fe86a394-080c-4ad1-b60b-c223bc59d98a\scratchpad\pdfium"` e `rmdir /s /q "%TEMP%\claude\C--Users-alexk-Tools-PrintImposer-printimposer\610902cd-2ed1-4042-b35e-173e9707e5c6\scratchpad\pdfium"`.
 - [ ] **Dono:** colar o `INSTRUCOES-DO-PROJETO.md` do repo no painel do Projeto — mudou de novo em 04/11 (linha do `/apply-wo` e do roteiro).
 - [ ] **Dono:** limpar `.claude/settings.local.json` (≈20 permissões avulsas dos testes de julho; agora ignorado pelo git).
 

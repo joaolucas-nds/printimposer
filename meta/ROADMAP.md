@@ -51,9 +51,10 @@
 **Ordem (escada C — `meta/analises/261103-ANALISE-ordem-f4.md`, aprovada em 03/11):**
 - ✅ **Etapa 1 — 1.3.0** (`meta/specs/261103-SPEC-F4-etapa1.md`, conferida pelo dono em 04/11): PDF sem perda por padrão (DEC-014) e compressão escolhível; espaçamento X/Y; folha em px e MB bruto no rodapé (cobre a antiga «barra de estado com o custo da folha»); AVIF nativo e HEIC opcional.
 - ✅ **Etapa 2 — 1.4.0** (`meta/specs/261104-SPEC-F4-etapa2.md`, roteiro do dono em 04/11: tudo certo): entrada PDF via `pypdfium2` opcional, uma página por item, rasterizada na orientação final.
-- ▶ **Intercalada — 1.4.1, robustez** (pedido do dono em 04/11): erro de abertura gravado e mostrado mesmo via `.bat`; aviso visível do segundo destino; configuração congelada durante a geração; guia rápido sem amarrar a uma ferramenta.
-- **Etapa 3 — portão:** imposição vetorial de ponta a ponta (pypdf/reportlab) — sim, F5 ou descartar, decidido com sonda própria (as folhas vão para casa e para gráfica). Pode exigir modularizar (revisitar DEC-003).
-- **Etapa 4 — 1.5.0:** marcas de corte de canto (ticks no gutter, alternativa às linhas atravessadas, DEC-005) + sangria em mm, no pipeline que o portão escolher.
+- ✅ **Intercalada — 1.4.1, robustez** (pedido do dono em 04/11; roteiro feito em 04/11: tudo certo): erro de abertura gravado e mostrado mesmo via `.bat`; aviso visível do segundo destino; configuração congelada durante a geração; guia rápido sem amarrar a uma ferramenta.
+- ▶ **Intercalada — 1.5.0** (escolha do dono em 04/11): SVG sem ampliação com Auto-Rotate e Preencher; guarda de qualidade olhando as imagens dentro do PDF; saída WebP e AVIF para compartilhar. Em paralelo, a sonda do portão (`meta/analises/261104-ANALISE-portao-vetorial.md`).
+- **Etapa 3 — portão:** imposição vetorial de ponta a ponta (pypdf/reportlab) — sim, F5 ou descartar, decidido com sonda própria e critério fixado antes de medir (`meta/analises/261104-ANALISE-portao-vetorial.md`) (as folhas vão para casa e para gráfica). Pode exigir modularizar (revisitar DEC-003).
+- **Etapa 4 — 1.6.0:** marcas de corte de canto (ticks no gutter, alternativa às linhas atravessadas, DEC-005) + sangria em mm, no pipeline que o portão escolher. A geometria (corte, sangria, segmentos de marca) nasce separada do desenho, porque PNG/JPEG/TIFF/WebP seguem raster qualquer que seja o portão.
 - ✅ ~~Entrada SVG~~ — antecipada e entregue na 1.1.0.
 - ⏳ Nitidez em zoom 125%/150% — conferir quando houver monitor ou escala para testar (herdada da F3).
 

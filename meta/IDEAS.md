@@ -30,14 +30,14 @@ Em vez de o app desenhar marcas, já desenhar a borda fina na arte (frame do Fig
 Mandar para a impressora sem arquivo intermediário. No Windows passa por API de impressão/spooler. Avaliar viabilidade. **F5.**
 
 ### 2026-11-04 — Saída WebP e AVIF
-Pergunta do dono. **Leitura do chat:** para **imprimir**, não agrega — impressora e gráfica esperam PDF, TIFF, PNG ou JPEG. Para **compartilhar** (WhatsApp, e-mail, arquivo), WebP sem perda costuma sair bem menor que PNG e AVIF menor ainda, e o Pillow instalado já grava os dois (AVIF medido em 03/11). Custo baixo: dois formatos novos na seção Saída com a mesma lógica de qualidade da 1.3. **Volta quando** o dono precisar mandar folhas por mensagem ou guardar muitas.
+Pergunta do dono. **Leitura do chat:** para **imprimir**, não agrega — impressora e gráfica esperam PDF, TIFF, PNG ou JPEG. Para **compartilhar** (WhatsApp, e-mail, arquivo), WebP sem perda costuma sair bem menor que PNG e AVIF menor ainda, e o Pillow instalado já grava os dois (AVIF medido em 03/11). Custo baixo: dois formatos novos na seção Saída com a mesma lógica de qualidade da 1.3. **Volta quando** o dono precisar mandar folhas por mensagem ou guardar muitas. **Entra na 1.5.0 (escolha do dono, 04/11).**
 
 ---
 
 ## 🤖 Ideias Ativas — Assistente
 
 ### 2026-11-04 — Guarda de qualidade para PDF com imagem raster dentro
-Visto nos PDFs reais do dono (gerados por jsPDF): a página tem imagens **JPEG embutidas** (`/DCTDecode` = 4 no PDF A4 de 4 páginas). A guarda ignora PDF porque «vetor não amplia» — mas a imagem de dentro amplia. Possível: ler as imagens da página (o `pypdfium2` enumera objetos) e calcular a resolução efetiva delas na célula, com o mesmo selo. **Volta quando** a etapa 4 da F4 (marcas e sangria) estiver fechada, ou antes, se um PDF de entrada sair borrado.
+Visto nos PDFs reais do dono (gerados por jsPDF): a página tem imagens **JPEG embutidas** (`/DCTDecode` = 4 no PDF A4 de 4 páginas). A guarda ignora PDF porque «vetor não amplia» — mas a imagem de dentro amplia. Possível: ler as imagens da página (o `pypdfium2` enumera objetos) e calcular a resolução efetiva delas na célula, com o mesmo selo. **Volta quando** a etapa 4 da F4 (marcas e sangria) estiver fechada, ou antes, se um PDF de entrada sair borrado. **Entra na 1.5.0 (escolha do dono, 04/11).**
 
 ### 2026-07-22 — Barra de progresso e status também merecem revisão
 A barra inferior tem um `CTkProgressBar` sempre visível mesmo parado, ocupando largura sem informar nada. Poderia aparecer só durante a geração, liberando espaço para o texto de status (onde entra o aviso do segundo destino). Pequeno, cosmético, na linha de "o que não informa não ocupa".

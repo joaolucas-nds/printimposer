@@ -7,7 +7,7 @@
 ---
 
 ## Visão Geral
-PrintImposer é uma ferramenta desktop de **imposição de páginas** para impressão em massa. O usuário seleciona várias imagens (tipicamente cards A6 exportados do Figma), escolhe um layout N-up (ex.: 4 por folha) e gera um PDF/PNG/JPEG/TIFF pronto para imprimir — sem arrastar arquivo por arquivo no diálogo do Windows. Foco em uso pessoal/profissional de quem produz cards e precisa agrupá-los em folhas A4 com mínimo esforço repetido.
+PrintImposer é uma ferramenta desktop de **imposição de páginas** para impressão em massa. O usuário seleciona várias imagens (cards, cartazes ou fotos — exportados de qualquer ferramenta: Figma, Canva, Affinity, Photoshop, Corel, geradores web — ou tirados do celular), escolhe um layout N-up (ex.: 4 por folha) e gera um PDF/PNG/JPEG/TIFF pronto para imprimir — sem arrastar arquivo por arquivo no diálogo do Windows. Foco em uso pessoal/profissional de quem produz cards e precisa agrupá-los em folhas A4 com mínimo esforço repetido.
 
 ## Stack Tecnológica
 - **Linguagem:** Python 3.9+ (testado até 3.14 no Windows do usuário)
@@ -81,7 +81,7 @@ A relação **qualidade × DPI**: a folha é rasterizada no DPI escolhido. Se a 
 7. **Reintroduzir o `cfg.dpi` temporário em `compose_page`** — a versão antiga trocava o DPI para o preview e restaurava no `finally`; parecia seguro e causou a FIX-004. Desde então o DPI desce por parâmetro (`override_dpi`) e não há nada a restaurar. → Não volte a mutar; ver armadilha 4.
 8. **Assumir que dependência opcional importada = dependência funcional** — `svglib` importa sem erro mas só desenha com `rlPyCairo`/`_rl_renderPM`. → **Sonde a capacidade com um render real**, não o import, e guarde a referência do módulo. Ver FIX-002.
 9. **Geometria de janela fixa sem clamp e sem DPI awareness** — `geometry("1100x780")` parece inofensivo, mas ignora o tamanho real do monitor e, sem `SetProcessDpiAwareness`, o Windows escala por bitmap em telas com zoom → janela cortada e texto borrado. → Centralize com clamp e declare DPI awareness antes de criar a janela. Ver HISTORY §6.
-10. **Linhas de corte finas em saída lossless** — inflam o arquivo (detalhe de alta frequência). → Para arquivos enxutos, prefira marcas de canto (futuro) ou borda feita no Figma. Ver DEC-005 e ROADMAP F3.
+10. **Linhas de corte finas em saída lossless** — inflam o arquivo (detalhe de alta frequência). → Para arquivos enxutos, prefira marcas de canto (futuro) ou borda feita na própria arte. Ver DEC-005 e ROADMAP F3.
 11. **Isolar o app num teste definindo só `HOME`** — parece criar um usuário limpo, mas no Windows, desde o Python 3.8, `Path.home()` lê `USERPROFILE` e **ignora `HOME`**; o `SettingsStore` (`Path.home() / ".printimposer"`) grava então nas configurações reais do dono. Em 03/11 o dono achou o segundo destino ligado apontando para `AppData\Local\Temp\claude\…`, sobra de teste. → Para abrir o app em teste, defina `USERPROFILE` **e** `HOME` para a pasta temporária, e confira no Sobre qual `settings.json` está em uso antes de mexer em qualquer campo.
 
 ## 📁 Arquivos Críticos (não mexer sem contexto)
@@ -92,7 +92,7 @@ A relação **qualidade × DPI**: a folha é rasterizada no DPI escolhido. Se a 
 - `meta/CEREBRO.md` — alinhado ao kit v1.133.0; o que é só deste projeto vai na seção «Técnicas específicas», que nenhum update sobrescreve.
 
 ## Contexto de Produto
-- **Usuário-alvo:** quem produz cards/artes em lote no Figma e imprime em casa ou manda para gráfica.
+- **Usuário-alvo:** quem produz cards, cartazes ou artes em lote — em qualquer ferramenta (Figma, Canva, Affinity, Photoshop, Corel, geradores web) — ou quem tem uma série de fotos (inclusive fotógrafos e fotos de celular), e imprime em casa ou manda para gráfica. **Não amarrar o produto, os textos nem a UI a uma ferramenta de origem** (pedido do dono, 2026-11-04).
 - **Dor que resolve:** agrupar dezenas de imagens em folhas A4 sem trabalho manual repetido a cada impressão.
-- **O que é sucesso:** "selecionar a forma de impressão → selecionar as imagens → gerar" — esforço mínimo, qualidade preservada do export do Figma.
+- **O que é sucesso:** "selecionar a forma de impressão → selecionar as imagens → gerar" — esforço mínimo, qualidade preservada do export de origem.
 - **O que o projeto deliberadamente NÃO é:** não é editor de imagem, não é software de prepress completo (sem separação de cores, trapping, registro multi-plate, booklet/imposição de cadernos). Foco em N-up plano para corte.

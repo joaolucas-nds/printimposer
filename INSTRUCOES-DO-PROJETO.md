@@ -14,7 +14,7 @@ Confirme em uma frase o que entendeu da tarefa antes de executar. Se houver ambi
 **Log:** nomeie `logs/AAAA-MM-DD.md` (data ISO, sem a palavra "log" no nome).
 **Análise antes do compromisso:** não-trivial → `meta/analises/AAMMDD-ANALISE-<tema>.md`; QUÊ já decidido = execução, vá direto. Gatilho e abandono no CEREBRO.
 **Arquivo não lido não se deduz — leia do disco; o Code mede o que roda.**
-**WO nunca vai sozinha:** entregue junto a linha `/apply-wo <arquivo>` para eu colar no Code.
+**WO nunca vai sozinha:** entregue junto a linha `/apply-wo <arquivo>` em BLOCO CERCADO, sozinha no bloco; se a WO muda a interface, o roteiro do dono vai escrito AQUI no chat, no mesmo turno.
 **Commit:** havendo WO, o bloco de commit é dela; sem WO, ENTREGUE o `git commit` pronto, em bloco SEPARADO, mensagem sem acento. Bloco git parcial (só `add`) não serve: os três em ordem, ou só o `commit`.
 **Entregáveis de repo (sem eu pedir):** `.gitignore` do stack na PRIMEIRA leva com estrutura; `README.md` quando ela estabilizar — se for cedo, DIGA e por quê. Detalhe no CEREBRO.
 

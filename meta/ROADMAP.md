@@ -40,25 +40,22 @@
 - ✅ Menubar `Arquivo · Opções · Ajuda` na topbar, com atalhos de teclado.
 - ✅ Diálogo "Criar atalho" que explica antes de gerar (substitui a seção `.bat`).
 - ✅ Presets migram para `Opções › Presets ▸` — mata o bug do menu que não atualizava.
-- ✅ Guia rápido "Figma → impressão" em Ajuda.
+- ✅ Guia rápido "Figma → impressão" em Ajuda *(rótulo generalizado para qualquer ferramenta na 1.4.1)*.
 - ✅ `sections_open` no `settings.json`, com padrão para arquivo antigo.
 - ⏳ Nitidez em zoom 125%/150% — segue sem exercitar (monitor a 100%). Movida para a F4.
 - ✅ Conferência visual do dono (03/11): menus, accordion, atalhos de teclado, presets sem reiniciar, atalho na pasta-pai — tudo certo.
 
-## 🟡 F4 — Qualidade profissional *(próxima — ordem interna não decidida)*
+## 🟡 F4 — Qualidade profissional *(em curso — escada C)*
 **Objetivo:** aproximar a saída do padrão de gráfica e acabar com a perda de qualidade na origem.
 **Critério de conclusão:** PDF entra como fonte vetorial; marcas de canto e sangria disponíveis; compressão escolhível.
-**Ordem (escada C — `meta/analises/261103-ANALISE-ordem-f4.md`, aprovada em 03/11):** 1) **1.3.0** — PDF sem perda, compressão escolhível, espaçamento X/Y, tamanho da folha no rodapé, HEIC/AVIF (`meta/specs/261103-SPEC-F4-etapa1.md`); 2) **1.4.0** — entrada PDF via `pypdfium2`; 3) **portão** — imposição vetorial: sim, F5 ou descartar, decidido com sonda própria (as folhas vão para casa e para gráfica); 4) **1.5.0** — marcas de canto + sangria, no pipeline que o portão escolher.
+**Ordem (escada C — `meta/analises/261103-ANALISE-ordem-f4.md`, aprovada em 03/11):**
+- ✅ **Etapa 1 — 1.3.0** (`meta/specs/261103-SPEC-F4-etapa1.md`, conferida pelo dono em 04/11): PDF sem perda por padrão (DEC-014) e compressão escolhível; espaçamento X/Y; folha em px e MB bruto no rodapé (cobre a antiga «barra de estado com o custo da folha»); AVIF nativo e HEIC opcional.
+- ✅ **Etapa 2 — 1.4.0** (`meta/specs/261104-SPEC-F4-etapa2.md`, roteiro do dono em 04/11: tudo certo): entrada PDF via `pypdfium2` opcional, uma página por item, rasterizada na orientação final.
+- ▶ **Intercalada — 1.4.1, robustez** (pedido do dono em 04/11): erro de abertura gravado e mostrado mesmo via `.bat`; aviso visível do segundo destino; configuração congelada durante a geração; guia rápido sem amarrar a uma ferramenta.
+- **Etapa 3 — portão:** imposição vetorial de ponta a ponta (pypdf/reportlab) — sim, F5 ou descartar, decidido com sonda própria (as folhas vão para casa e para gráfica). Pode exigir modularizar (revisitar DEC-003).
+- **Etapa 4 — 1.5.0:** marcas de corte de canto (ticks no gutter, alternativa às linhas atravessadas, DEC-005) + sangria em mm, no pipeline que o portão escolher.
 - ✅ ~~Entrada SVG~~ — antecipada e entregue na 1.1.0.
-- Entrada PDF (mesma família do SVG; é o que o Figma exporta em vetor).
-- Formatos extras de baixo custo: HEIC/AVIF via `pillow-heif`.
-- Marcas de corte de canto (ticks no gutter) como alternativa às linhas atravessadas (DEC-005).
-- Sangria (bleed) configurável em mm.
-- Escolha de compressão na saída (lossless × JPEG com qualidade).
-- Margem por eixo (X/Y independentes) e folga por encolhimento.
-- Barra de estado com px, MB estimados e selo de qualidade.
-- **Imposição vetorial de ponta a ponta** (pypdf/reportlab): qualidade perfeita e arquivos minúsculos; pode exigir modularizar (revisitar DEC-003).
-- Nitidez em zoom 125%/150% — conferir quando houver monitor ou escala para testar (herdada da F3).
+- ⏳ Nitidez em zoom 125%/150% — conferir quando houver monitor ou escala para testar (herdada da F3).
 
 ## 🔵 F5 — Distribuição, fluidez e layouts livres *(futuro, sem data)*
 **Objetivo:** facilitar adoção por quem não tem Python e soltar as amarras do grid regular.
@@ -66,14 +63,14 @@
 - Empacotar como .exe (PyInstaller, com hook do `tkinterdnd2`).
 - Drag-and-drop de arquivos na janela; reordenar a lista arrastando.
 - Rotação manual por imagem; preenchimento automático para N folhas.
-- Layout não-uniforme (moldura 2+1 de 3 fotos) — exige modelo de células de tamanhos diferentes.
+- Layout não-uniforme (moldura 2+1 de 3 fotos, e outras) — exige modelo de células de tamanhos diferentes. Caso de uso do dono (04/11): um fotógrafo monta, em segundos, várias molduras diferentes com uma série de fotos.
 - Internacionalização (i18n).
 - Imprimir direto, sem salvar arquivo (API de impressão do Windows).
 
 ---
 
 ## 🚫 Itens descartados desta visão
-- **SVG como formato de saída** — sem ganho com arte raster; qualidade vetorial vem da entrada (F3). (Entrada SVG segue ativa.)
-- **Raia de desenvolvimento no Claude Code como modo padrão** — ver DEC-007 e DEC-010 (virou raia de validação).
+- **SVG como formato de saída** — sem ganho com arte raster; qualidade vetorial vem da entrada (PDF na 1.4.0). (Entrada SVG segue ativa.)
+- **Raia de desenvolvimento no Claude Code como modo padrão** — ver DEC-007 e DEC-010 (virou raia de validação). **Revertido em 2026-11-03 (DEC-012):** o Claude Code passou a implementar o código.
 - **Tabs para as configurações** — descartadas na análise da F3: 6 seções com rótulos longos passam do limite prático de 3–5 abas, e as duas mais usadas cairiam em abas diferentes. Ver SPEC-F3-UI §2.
 - **Software de prepress completo** (separação de cores, trapping, registro multi-plate, booklet) — fora do escopo (ver CONTEXT §"O que o projeto NÃO é").

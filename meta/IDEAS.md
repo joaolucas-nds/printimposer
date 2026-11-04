@@ -67,7 +67,7 @@ Hoje o `draft()` só acelera a miniatura. Na composição, quando a célula é b
 O teto de 12×12 impede o extremo, mas 10×10 num A4 dá células de ~20 mm: tecnicamente válido, quase sempre inútil. A guarda de qualidade já avisa por causa do upscale, mas um aviso explícito de "célula muito pequena para impressão" seria mais direto.
 
 ### 2026-07-18 — Entrada PDF (vetorial) — irmã da entrada SVG
-O Figma exporta PDF. PDF de entrada tem o mesmo ganho do SVG (rasterizar na resolução exata da célula, zero upscale) e é o degrau natural para a imposição vetorial. Tratar SVG e PDF como a mesma família de entrada.
+O Figma exporta PDF. PDF de entrada tem o mesmo ganho do SVG (rasterizar na resolução exata da célula, zero upscale) e é o degrau natural para a imposição vetorial. Tratar SVG e PDF como a mesma família de entrada. **Entra na 1.4.0 (F4 etapa 2), via `pypdfium2` opcional** — `meta/specs/261104-SPEC-F4-etapa2.md`.
 
 ### 2026-07-18 — Formatos de entrada extras de baixo custo
 `pillow-heif` (HEIC/AVIF, fotos de celular) e GIF/ICO já suportados pelo Pillow. Custo quase zero, cobre "arrastei o que tinha na pasta". **Medido em 03/11: o Pillow 12.2 já lê AVIF sozinho; HEIC segue via `pillow-heif` (opcional). Entra na 1.3.0.**

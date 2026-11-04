@@ -34,13 +34,13 @@
 - (vazio)
 
 ## ❌ Quebrado / Com Problema
-- (nada conhecido.)
+- **Suspeita, por leitura de código (não medida):** SVG com Auto-Rotate pode sair **ampliado** — é rasterizado na caixa `(cw, ch)` e só depois girado, então arte deitada numa célula em pé é desenhada pequena e esticada. Não se manifesta hoje (SVG indisponível na máquina do dono). O PDF da 1.4.0 já rasteriza na orientação final; o SVG pede um teste com stub e o mesmo conserto. Ver SPEC-F4-etapa2 §3.
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
 - [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho». O README hoje não tem imagens; com os prints, o chat os encaixa.
 - [ ] **Chat:** etapa 2 (1.4.0) — entrada PDF via `pypdfium2`.
-- [ ] **Dono:** apagar a pasta temporária da sonda `pypdfium2` (`rm -r` negado ao Code na wo0006): `%TEMP%\claude\C--Users-alexk-Tools-PrintImposer-printimposere86a394-080c-4ad1-b60b-c223bc59d98a\scratchpad\pdfium`.
+- [ ] **Dono:** apagar a pasta temporária da sonda `pypdfium2` (`rm -r` negado ao Code na wo0006). No CMD: `rmdir /s /q "%TEMP%\claude\C--Users-alexk-Tools-PrintImposer-printimposer\fe86a394-080c-4ad1-b60b-c223bc59d98a\scratchpad\pdfium"`.
 - [ ] Instalar um back-end de SVG no Windows e confirmar que o cabeçalho mostra o nome certo. `cairosvg` precisa de libcairo; `svglib` precisa de `rlPyCairo` — nenhum é 100% Python puro na hora de desenhar (ver FIX-002).
 - [ ] Avaliar `Image.draft()` também no caminho de composição (hoje só na miniatura).
 - [ ] **Dono:** desmarcar o segundo destino de saída — está ligado apontando para uma pasta temporária do Claude Code (`AppData\Local\Temp\claude\…`), sobra de teste antigo.

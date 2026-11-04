@@ -24,6 +24,7 @@ import types
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 # ── Stub de GUI: permite importar o módulo sem Tk instalado ──────────────────
 if "tkinter" not in sys.modules:
@@ -584,6 +585,202 @@ class SvgTests(unittest.TestCase):
         self.assertEqual(eng.quality_report()["level"], "none")
 
 
+class PdfInputTests(unittest.TestCase):
+    """Entrada PDF (F4 etapa 2). Os testes com stub rodam sem `pypdfium2`;
+    os de render real são pulados sem ele, como os de SVG."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.pdf = self.tmp / "livro.pdf"
+        self.pdf.write_bytes(b"%PDF-1.4 stub")     # só precisa existir (mtime da miniatura)
+        self.calls = []
+
+        def fake_raster(path, page, bw, bh, fit_mode="fit"):
+            self.calls.append((page, bw, bh))
+            shade = 40 + 60 * page
+            return Image.new("RGBA", (bw, bh), (shade, shade, shade, 255))
+
+        self.patches = [
+            mock.patch.object(pi, "SUPPORTED_EXT", pi.SUPPORTED_EXT | {".pdf"}),
+            mock.patch.object(pi, "rasterize_pdf", fake_raster),
+            mock.patch.object(pi, "pdf_page_size", lambda path, page: (300.0, 200.0)),
+        ]
+        for p in self.patches:
+            p.start()
+            self.addCleanup(p.stop)
+
+    def _engine(self, entries, cell=(2, 2), **cfg_kw):
+        cfg = pi.LayoutConfig()
+        cfg.cols, cfg.rows, cfg.dpi = cell[0], cell[1], 72
+        for k, v in cfg_kw.items():
+            setattr(cfg, k, v)
+        return pi.ImpositionEngine(entries, cfg)
+
+    def test_sem_backend_pdf_fora_de_extensoes_e_seletor(self):
+        self.assertEqual(".pdf" in pi.PDF_EXT, pi.PDF_OK)
+        tipos = pi.ImageListPanel._filetypes(None)
+        self.assertEqual(any(t[0] == "PDF" for t in tipos), pi.PDF_OK)
+        self.assertNotIn(".pdf", pi.RASTER_EXT)
+
+    def test_n_paginas_viram_n_itens_com_rotulo(self):
+        with mock.patch.object(pi, "pdf_page_count", lambda p: 3):
+            items, skipped = pi.plan_ingest([str(self.pdf)])
+        self.assertEqual(items, [(str(self.pdf), i, 3) for i in range(3)])
+        self.assertEqual(skipped, [])
+        e = pi.ImageEntry(*items[1])
+        self.assertEqual(e.page_label, " · p. 2/3")
+        self.assertEqual(pi.ImageEntry(str(self.pdf)).page_label, "")
+
+    def test_confirmacao_acima_de_50_paginas(self):
+        perguntas = []
+
+        def nao(nome, n):
+            perguntas.append((nome, n))
+            return False
+
+        with mock.patch.object(pi, "pdf_page_count", lambda p: 120):
+            items, skipped = pi.plan_ingest([str(self.pdf)], confirm_many=nao)
+            self.assertEqual(items, [])
+            self.assertEqual(perguntas, [("livro.pdf", 120)])
+            self.assertEqual(skipped[0][0], "livro.pdf")
+            items, _ = pi.plan_ingest([str(self.pdf)], confirm_many=lambda n, c: True)
+            self.assertEqual(len(items), 120)
+        with mock.patch.object(pi, "pdf_page_count", lambda p: 50):
+            items, _ = pi.plan_ingest([str(self.pdf)], confirm_many=nao)
+            self.assertEqual(len(items), 50)       # 50 exatos não pede confirmação
+
+    def test_pdf_ilegivel_vai_para_pulados_sem_derrubar_o_lote(self):
+        bom = make_image(self.tmp / "ok.png", 100, 100)
+
+        def contador(p):
+            raise RuntimeError("Failed to load document (PDFium: Incorrect password error)")
+
+        with mock.patch.object(pi, "pdf_page_count", contador):
+            items, skipped = pi.plan_ingest([bom, str(self.pdf)])
+        self.assertEqual(items, [(bom, 0, 1)])
+        self.assertEqual(skipped, [("livro.pdf", "protegido por senha")])
+        with mock.patch.object(pi, "pdf_page_count", lambda p: 0):
+            _, skipped = pi.plan_ingest([str(self.pdf)])
+        self.assertEqual(skipped, [("livro.pdf", "sem páginas")])
+        with mock.patch.object(pi, "pdf_page_count",
+                               mock.Mock(side_effect=ValueError("lixo"))):
+            _, skipped = pi.plan_ingest([str(self.pdf)])
+        self.assertEqual(skipped, [("livro.pdf", "ilegível ou corrompido")])
+
+    def test_caixa_de_render_na_orientacao_final(self):
+        """Página deitada (300×200 pt) em célula em pé: com Auto-Rotate a caixa
+        pedida ao renderizador é (ch, cw) — nada é ampliado depois do giro."""
+        e = pi.ImageEntry(str(self.pdf))
+        eng = self._engine([e], cell=(2, 2), paper_w_mm=100.0, paper_h_mm=200.0,
+                           auto_rotate=True)
+        cw, ch = eng.cell_px(72)
+        self.assertLess(cw, ch)                    # célula em pé
+        self.calls.clear()
+        eng.compose_page(0, eng._expand(), override_dpi=72)
+        self.assertEqual(self.calls[-1][1:], (ch, cw))
+        # Sem Auto-Rotate: caixa é a própria célula.
+        eng.cfg.auto_rotate = False
+        self.calls.clear()
+        eng.compose_page(0, eng._expand(), override_dpi=72)
+        self.assertEqual(self.calls[-1][1:], (cw, ch))
+        # Mesma orientação (célula deitada): também (cw, ch).
+        eng2 = self._engine([e], cell=(1, 1), paper_w_mm=200.0, paper_h_mm=100.0,
+                            auto_rotate=True)
+        cw2, ch2 = eng2.cell_px(72)
+        self.calls.clear()
+        eng2.compose_page(0, eng2._expand(), override_dpi=72)
+        self.assertEqual(self.calls[-1][1:], (cw2, ch2))
+
+    def test_pdf_fora_da_guarda_de_qualidade(self):
+        eng = self._engine([pi.ImageEntry(str(self.pdf))], cell=(4, 4))
+        self.assertEqual(eng.quality_report()["level"], "none")
+
+    def test_miniatura_distingue_paginas(self):
+        a = pi.ImageEntry(str(self.pdf), 0, 2)
+        b = pi.ImageEntry(str(self.pdf), 1, 2)
+        self.assertIsNotNone(a.pil_thumb)
+        self.assertNotEqual(a.pil_thumb.getpixel((28, 28)), b.pil_thumb.getpixel((28, 28)))
+
+    def test_referencia_aceita_str_e_sourceref(self):
+        img = make_image(self.tmp / "r.png", 300, 400)
+        eng = self._engine([pi.ImageEntry(img)], cell=(2, 2))
+        self.assertIsInstance(eng._expand()[0], pi.SourceRef)
+        a = eng.compose_page(0, [img])
+        b = eng.compose_page(0, [pi.SourceRef(img)])
+        self.assertEqual(a.tobytes(), b.tobytes())
+
+    def test_pagina_certa_vai_para_o_render(self):
+        entradas = [pi.ImageEntry(str(self.pdf), i, 3) for i in range(3)]
+        eng = self._engine(entradas, cell=(2, 2))
+        self.calls.clear()
+        eng.compose_page(0, eng._expand(), override_dpi=72)
+        self.assertEqual([c[0] for c in self.calls], [0, 1, 2])
+
+
+@unittest.skipUnless(pi.PDF_OK, "sem pypdfium2")
+class PdfRealTests(unittest.TestCase):
+    """Render real com `pypdfium2`. PDFs de teste feitos pelo `write_pdf` (DEC-014)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        # 3 páginas: duas em pé (~100×140 mm) e uma DEITADA (~140×100 mm).
+        tamanhos = [(394, 551), (394, 551), (551, 394)]
+        cores = [(200, 30, 30), (30, 200, 30), (30, 30, 200)]
+        pags = [Image.new("RGB", t, c) for t, c in zip(tamanhos, cores)]
+        self.pdf = str(self.tmp / "tres.pdf")
+        pi.write_pdf(pags, self.pdf, 100)
+
+    def test_sondagem_guardou_o_modulo(self):
+        self.assertTrue(pi._PDF_MODS)
+        self.assertIn(".pdf", pi.SUPPORTED_EXT)
+
+    def test_tres_paginas_viram_tres_itens(self):
+        items, skipped = pi.plan_ingest([self.pdf])
+        self.assertEqual([(i[1], i[2]) for i in items], [(0, 3), (1, 3), (2, 3)])
+        self.assertEqual(skipped, [])
+        self.assertTrue(all(pi.ImageEntry(*i).pil_thumb is not None for i in items))
+
+    def test_arquivo_corrompido_e_pulado(self):
+        ruim = self.tmp / "ruim.pdf"
+        ruim.write_text("isto nao e um pdf")
+        items, skipped = pi.plan_ingest([str(ruim), self.pdf])
+        self.assertEqual(len(items), 3)
+        self.assertEqual([s[0] for s in skipped], ["ruim.pdf"])
+
+    def test_folha_2x2_em_png_e_pdf(self):
+        items, _ = pi.plan_ingest([self.pdf])
+        entries = [pi.ImageEntry(*i) for i in items]
+        entries[0].quantity = 2
+        cfg = pi.LayoutConfig()
+        cfg.cols, cfg.rows, cfg.dpi = 2, 2, 300
+        cfg.output_dir = str(self.tmp / "out")
+        for fmt in ("PNG", "PDF"):
+            cfg.output_format = fmt
+            eng = pi.ImpositionEngine(entries, cfg)
+            saved = eng.save(eng.generate_all())
+            self.assertTrue(saved and all(os.path.getsize(s) > 0 for s in saved))
+
+    def test_paisagem_em_celula_retrato_sem_ampliacao(self):
+        cfg = pi.LayoutConfig()
+        cfg.cols, cfg.rows, cfg.dpi = 2, 2, 300
+        cfg.auto_rotate = True
+        eng = pi.ImpositionEngine([], cfg)
+        cw, ch = eng.cell_px()
+        w_pt, h_pt = pi.pdf_page_size(self.pdf, 2)
+        self.assertGreater(w_pt, h_pt)
+        self.assertEqual(pi.pdf_render_box(w_pt, h_pt, cw, ch, True), (ch, cw))
+        img = pi.open_source(self.pdf, cw, ch, page=2, auto_rotate=True)
+        # Renderizada já deitada, na caixa girada (ch × cw): um lado encosta nela
+        # e nenhum a ultrapassa — depois do giro cabe na célula sem crescer.
+        self.assertLessEqual(img.width, ch + 1)
+        self.assertLessEqual(img.height, cw + 1)
+        self.assertTrue(abs(img.width - ch) <= 1 or abs(img.height - cw) <= 1)
+
+    def test_fundo_branco_opaco(self):
+        img = pi.rasterize_pdf(self.pdf, 0, 200, 280)
+        self.assertEqual(img.getpixel((img.width // 2, img.height // 2))[3], 255)
+
+
 class TkAttributeCollisionTests(unittest.TestCase):
     """REGRESSÃO do bloqueador da 1.1.0 (FIX-003).
 
@@ -843,7 +1040,7 @@ class MenuAndDialogTests(unittest.TestCase):
         self.assertLessEqual(pi.ConfigPanel.BOTTOM_H, 84)
 
     def test_versao(self):
-        self.assertEqual(pi.VERSION, "1.3.0")
+        self.assertEqual(pi.VERSION, "1.4.0")
 
 
 class LauncherTests(unittest.TestCase):

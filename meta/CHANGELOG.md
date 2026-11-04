@@ -4,6 +4,25 @@
 > **Cresce**: entradas novas no topo. Registra só o que foi de fato concluído/entregue.
 
 ## [Não lançado]
+- (nada pendente.)
+
+---
+
+## [1.4.0] — 2026-11-04
+Fase F4, etapa 2 (SPEC-F4-etapa2). Implementada pelo Code (wo0007); a conferência na tela e com um PDF do Figma está com o dono.
+
+### Adicionado
+- Entrada PDF via `pypdfium2` (opcional, sondada por render real — FIX-002): cada página vira um item da lista (`arquivo.pdf · p. 2/5`), com miniatura, quantidade, ▲ ▼ e ✕. Sem o pacote, `.pdf` some do seletor e do «+ Pasta» e o app abre como na 1.3.
+- A página é rasterizada no tamanho da célula, **já na orientação final**: com Auto-Rotate e orientação diferente da célula, a caixa de render é `(ch, cw)`. Nenhuma ampliação depois do render; fundo branco opaco.
+- PDF com mais de 50 páginas pede confirmação; PDF com senha, corrompido ou sem páginas é pulado, e o lote termina com **uma** mensagem listando os pulados e o motivo.
+- Item de PDF fica fora da guarda de qualidade (limite: PDF que só embrulha uma imagem raster pequena continua pequeno).
+- Cabeçalho `v1.4.0 · SVG: … · PDF: …`; `Ajuda › Sobre` lista «PDF sim/não» em «Formatos extras».
+- 15 testes headless (85 → 100): 9 com stub do renderizador e 6 com `pypdfium2` real (pulados sem ele).
+
+### Modificado
+- Referência de fonte (`SourceRef`: caminho + página) atravessa o motor (`_expand`, `compose_page`, `open_source`); `compose_page` continua aceitando caminhos puros. Cache de miniatura chaveado também pela página.
+- `VERSION` para 1.4.0.
+
 ### Documentação
 - README atualizado para a 1.3: PDF sem perda por padrão e compressão/qualidade por formato, espaçamento entre colunas e entre linhas, linha da folha no rodapé, AVIF nativo e HEIC opcional, e por que o PDF ficou maior que na 1.2.
 

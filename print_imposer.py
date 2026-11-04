@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PrintImposer v1.3.0
+PrintImposer v1.4.0
 Ferramenta de Imposição de Páginas para Impressão em Massa
 
 Selecione imagens, configure o layout e gere PDFs/PNGs prontos para impressão.
@@ -26,6 +26,11 @@ Novidades da 1.3 (fase F4, etapa 1 — SPEC-F4-etapa1):
   - Espaçamento independente entre colunas e entre linhas
   - Rodapé mostra o tamanho da folha em px e o tamanho bruto em MB
   - Entrada AVIF (nativa do Pillow) e HEIC/HEIF (com `pillow-heif`, opcional)
+
+Novidades da 1.4 (fase F4, etapa 2 — SPEC-F4-etapa2):
+  - Entrada PDF via `pypdfium2` (opcional): cada página vira um item da lista
+  - A página é rasterizada no tamanho da célula, já na orientação final
+    (sem ampliação depois do render); PDF ilegível é pulado com aviso
 """
 
 import os
@@ -35,7 +40,7 @@ import json
 import threading
 import time
 from pathlib import Path
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Tuple, Optional, Dict, Any, NamedTuple
 
 import tkinter as tk
 from tkinter import filedialog, messagebox, colorchooser
@@ -103,6 +108,38 @@ SVG_BACKEND = _probe_svg_backend()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# SUPORTE OPCIONAL A PDF (ENTRADA)
+# ══════════════════════════════════════════════════════════════════════════════
+# `pypdfium2` traz o PDFium embutido (sem cairo, sem compilar). Como no SVG,
+# sondamos por render real (FIX-002) e GUARDAMOS o módulo: importar não basta,
+# e perder a referência quebraria o render só na hora de gerar a folha.
+
+PDF_BACKEND: Optional[str] = None
+_PDF_MODS: Dict[str, Any] = {}
+
+
+def _probe_pdf() -> Optional[str]:
+    """Cria um PDF mínimo em memória e o RENDERIZA; só então o back-end conta."""
+    try:
+        import pypdfium2 as pdfium  # type: ignore
+        doc = pdfium.PdfDocument.new()
+        page = doc.new_page(16, 16)
+        img = page.render(scale=1).to_pil()
+        page.close()
+        doc.close()
+        if isinstance(img, Image.Image) and img.width > 0:
+            _PDF_MODS["pdfium"] = pdfium
+            return "pypdfium2"
+    except Exception:
+        pass
+    return None
+
+
+PDF_BACKEND = _probe_pdf()
+PDF_OK: bool = PDF_BACKEND is not None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # SUPORTE OPCIONAL A AVIF / HEIC
 # ══════════════════════════════════════════════════════════════════════════════
 # AVIF: o Pillow 12 lê sozinho, mas só se foi compilado com o codec — sondamos
@@ -133,7 +170,7 @@ HEIF_OK: bool = _probe_heif()
 # CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION  = "1.3.0"
+VERSION  = "1.4.0"
 APP_NAME = "PrintImposer"
 MM_TO_INCH = 1.0 / 25.4
 
@@ -143,7 +180,11 @@ if AVIF_OK:
 if HEIF_OK:
     RASTER_EXT |= {'.heic', '.heif'}
 SVG_EXT    = {'.svg'} if SVG_BACKEND else set()
-SUPPORTED_EXT = RASTER_EXT | SVG_EXT
+PDF_EXT    = {'.pdf'} if PDF_OK else set()
+SUPPORTED_EXT = RASTER_EXT | SVG_EXT | PDF_EXT
+
+# Acima disso o PDF pede confirmação antes de virar uma página por item.
+PDF_CONFIRM_PAGES = 50
 
 THUMB_W, THUMB_H = 56, 56
 PREVIEW_MAX = (460, 580)
@@ -379,8 +420,103 @@ def is_svg(path: str) -> bool:
     return Path(path).suffix.lower() == ".svg"
 
 
-def open_source(path: str, box_w: int = 0, box_h: int = 0) -> Image.Image:
-    """Abre uma imagem-fonte. SVG é rasterizado na caixa pedida; raster abre direto."""
+def is_pdf(path: str) -> bool:
+    return Path(path).suffix.lower() == ".pdf"
+
+
+def is_vector(path: str) -> bool:
+    """SVG e PDF são desenhados no tamanho da célula: não têm tamanho nativo em px."""
+    return is_svg(path) or is_pdf(path)
+
+
+class SourceRef(NamedTuple):
+    """Referência de fonte: arquivo + página (0 para tudo que não é PDF)."""
+    path: str
+    page: int = 0
+
+
+def as_ref(src: Any) -> SourceRef:
+    """Aceita caminho puro (str) ou SourceRef — o motor trabalha sempre com SourceRef."""
+    return src if isinstance(src, SourceRef) else SourceRef(str(src))
+
+
+def pdf_page_count(path: str) -> int:
+    """Número de páginas do PDF. Levanta se estiver ilegível ou com senha."""
+    pdfium = _PDF_MODS["pdfium"]
+    doc = pdfium.PdfDocument(path)
+    try:
+        return len(doc)
+    finally:
+        doc.close()
+
+
+def pdf_page_size(path: str, page: int) -> Tuple[float, float]:
+    """Tamanho da página em pontos (já considerando a rotação da página)."""
+    pdfium = _PDF_MODS["pdfium"]
+    doc = pdfium.PdfDocument(path)
+    try:
+        pg = doc[page]
+        try:
+            w, h = pg.get_size()
+        finally:
+            pg.close()
+        return float(w), float(h)
+    finally:
+        doc.close()
+
+
+def pdf_render_box(w_pt: float, h_pt: float, cw: int, ch: int,
+                   auto_rotate: bool) -> Tuple[int, int]:
+    """Caixa onde a página deve ser rasterizada, JÁ na orientação final.
+
+    Com Auto-Rotate e orientação da página diferente da célula, o motor girará
+    a imagem 90°; renderizar na caixa (cw, ch) e girar depois desenharia a arte
+    pequena e a ampliaria. Por isso a caixa nasce girada: (ch, cw).
+    """
+    if auto_rotate and (cw >= ch) != (w_pt >= h_pt):
+        return ch, cw
+    return cw, ch
+
+
+def rasterize_pdf(path: str, page: int, box_w: int, box_h: int,
+                  fit_mode: str = "fit") -> Image.Image:
+    """Rasteriza uma página de PDF para caber (ou cobrir) a caixa, sem ampliar depois.
+
+    fit: escala que cabe na caixa; fill: escala que a cobre (o `_place_image`
+    recorta); stretch: cobre a caixa e reduz até (box_w, box_h) — reduzir nunca
+    borra como ampliar. Fundo branco opaco: PDF sem fundo sairia preto/transparente.
+    """
+    pdfium = _PDF_MODS["pdfium"]
+    doc = pdfium.PdfDocument(path)
+    try:
+        pg = doc[page]
+        try:
+            w_pt, h_pt = pg.get_size()
+            if w_pt <= 0 or h_pt <= 0:
+                raise ValueError("PDF com página de tamanho zero")
+            pick = max if fit_mode in ("fill", "stretch") else min
+            scale = pick(box_w / w_pt, box_h / h_pt)
+            img = pg.render(scale=scale, fill_color=(255, 255, 255, 255)).to_pil()
+        finally:
+            pg.close()
+    finally:
+        doc.close()
+    img = img.convert("RGBA")
+    if fit_mode == "stretch" and img.size != (box_w, box_h):
+        img = img.resize((box_w, box_h), Image.LANCZOS)
+    return img
+
+
+def open_source(path: str, box_w: int = 0, box_h: int = 0, page: int = 0,
+                auto_rotate: bool = False, fit_mode: str = "fit") -> Image.Image:
+    """Abre uma imagem-fonte. SVG e PDF são rasterizados na caixa pedida; raster abre direto."""
+    if is_pdf(path):
+        if box_w <= 0 or box_h <= 0:
+            box_w = box_h = 1000  # tamanho de cortesia para inspeção/miniatura
+        else:
+            w_pt, h_pt = pdf_page_size(path, page)
+            box_w, box_h = pdf_render_box(w_pt, h_pt, box_w, box_h, auto_rotate)
+        return rasterize_pdf(path, page, box_w, box_h, fit_mode)
     if is_svg(path):
         if box_w <= 0 or box_h <= 0:
             box_w = box_h = 1000  # tamanho de cortesia para inspeção/miniatura
@@ -397,21 +533,34 @@ class ImageEntry:
 
     # Cache de miniatura por (caminho, mtime): evita reprocessar ao reordenar
     # ou mexer na quantidade. Ver HISTORY §8 (otimização segura).
-    _thumb_cache: Dict[Tuple[str, float], Image.Image] = {}
+    _thumb_cache: Dict[Tuple[str, float, int], Image.Image] = {}
 
-    def __init__(self, path: str):
+    def __init__(self, path: str, page_index: int = 0, page_count: int = 1):
         self.path     = path
         self.filename = Path(path).name
+        self.page_index = page_index      # só PDF: qual página este item representa
+        self.page_count = page_count
         self.quantity = 1
         self.src_size: Optional[Tuple[int, int]] = None   # px da fonte (None p/ SVG)
         self.pil_thumb: Optional[Image.Image] = None
         self._load_thumb()
 
+    @property
+    def page_label(self) -> str:
+        """Sufixo « · p. 2/5» — só para PDF de mais de uma página."""
+        if self.page_count > 1:
+            return f" · p. {self.page_index + 1}/{self.page_count}"
+        return ""
+
+    @property
+    def ref(self) -> SourceRef:
+        return SourceRef(self.path, self.page_index)
+
     def _load_thumb(self):
         try:
-            key = (self.path, os.path.getmtime(self.path))
+            key = (self.path, os.path.getmtime(self.path), self.page_index)
         except OSError:
-            key = (self.path, 0.0)
+            key = (self.path, 0.0, self.page_index)
 
         cached = ImageEntry._thumb_cache.get(key)
         if cached is not None:
@@ -419,7 +568,11 @@ class ImageEntry:
             return
 
         try:
-            if is_svg(self.path):
+            if is_pdf(self.path):
+                img = rasterize_pdf(self.path, self.page_index,
+                                    THUMB_W * 3, THUMB_H * 3)
+                self.src_size = None
+            elif is_svg(self.path):
                 img = rasterize_svg(self.path, THUMB_W * 3, THUMB_H * 3)
                 self.src_size = None          # vetor: não tem tamanho nativo em px
             else:
@@ -449,7 +602,7 @@ class ImageEntry:
         """Tamanho real da fonte em px, sem decodificar a imagem inteira."""
         if self.src_size:
             return self.src_size
-        if is_svg(self.path):
+        if is_vector(self.path):
             return None
         try:
             with Image.open(self.path) as im:
@@ -690,10 +843,10 @@ class ImpositionEngine:
 
     # ── Contagem ─────────────────────────────────────────────────────────────
 
-    def _expand(self) -> List[str]:
-        out = []
+    def _expand(self) -> List[SourceRef]:
+        out: List[SourceRef] = []
         for e in self.entries:
-            out.extend([e.path] * max(1, e.quantity))
+            out.extend([e.ref] * max(1, e.quantity))
         return out
 
     def total_expanded(self) -> int:
@@ -712,14 +865,15 @@ class ImpositionEngine:
 
         Retorna {'level': 'ok'|'warn'|'bad'|'none', 'ratio': float, 'worst': str,
                  'cell': (w,h), 'needed': (w,h)}.
-        SVG é ignorado: rasteriza na resolução da célula, então nunca dá upscale.
+        SVG e PDF são ignorados: rasterizam na resolução da célula, então nunca dão
+        upscale. (Limite: PDF que só embrulha uma imagem pequena continua pequeno.)
         """
         cw, ch = self.cell_px()
         worst_ratio = None
         worst_name  = ""
 
         for e in self.entries:
-            if is_svg(e.path):
+            if is_vector(e.path):
                 continue
             size = e.real_size()
             if not size:
@@ -834,7 +988,7 @@ class ImpositionEngine:
             y = mo + r * ch + (r - 1) * mby + (mby // 2 if mby > 0 else 0)
             fn(0, y, pw, y)
 
-    def compose_page(self, page_idx: int, image_paths: List[str],
+    def compose_page(self, page_idx: int, image_paths: List[Any],
                      override_dpi: Optional[int] = None) -> Image.Image:
         """Compõe uma folha no DPI pedido (ou no do config).
         NÃO muta `cfg.dpi`. A versão anterior trocava o valor e restaurava num
@@ -866,8 +1020,11 @@ class ImpositionEngine:
             y   = mo + row * (ch + mby)
 
             try:
-                # SVG rasteriza direto no tamanho da célula: zero upscale.
-                img  = open_source(image_paths[idx], cw, ch)
+                # SVG/PDF rasterizam direto no tamanho da célula: zero upscale.
+                src  = as_ref(image_paths[idx])
+                img  = open_source(src.path, cw, ch, page=src.page,
+                                   auto_rotate=cfg.auto_rotate,
+                                   fit_mode=cfg.fit_mode)
                 cell = self._place_image(img, cw, ch, bg)
             except Exception:
                 cell = Image.new("RGB", (cw, ch), (200, 190, 190))
@@ -992,6 +1149,46 @@ def build_launcher_bat(script_path: str) -> str:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# INGESTÃO DE ARQUIVOS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def plan_ingest(paths, confirm_many=None) -> Tuple[List[Tuple[str, int, int]],
+                                                   List[Tuple[str, str]]]:
+    """Decide o que entra na lista a partir dos caminhos escolhidos.
+
+    Devolve ([(caminho, página, total)], [(arquivo pulado, motivo)]). Cada página
+    de PDF vira um item. `confirm_many(nome, n)` é chamado quando o PDF passa de
+    PDF_CONFIRM_PAGES páginas (False = não adiciona). PDF com senha, corrompido
+    ou sem páginas vai para os pulados e não derruba o lote. Sem I/O de tela.
+    """
+    items: List[Tuple[str, int, int]] = []
+    skipped: List[Tuple[str, str]] = []
+    for f in paths:
+        ext = Path(f).suffix.lower()
+        if ext not in SUPPORTED_EXT:
+            continue
+        if ext != ".pdf":
+            items.append((str(f), 0, 1))
+            continue
+        name = Path(f).name
+        try:
+            n = pdf_page_count(str(f))
+        except Exception as exc:
+            msg = str(exc).lower()
+            skipped.append((name, "protegido por senha" if "password" in msg
+                                  else "ilegível ou corrompido"))
+            continue
+        if n < 1:
+            skipped.append((name, "sem páginas"))
+            continue
+        if n > PDF_CONFIRM_PAGES and confirm_many and not confirm_many(name, n):
+            skipped.append((name, "não confirmado"))
+            continue
+        items.extend((str(f), i, n) for i in range(n))
+    return items, skipped
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # WIDGET: MINIATURA DA GRADE
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -1070,6 +1267,8 @@ class ImageRow(ctk.CTkFrame):
         name = self.entry.filename
         if len(name) > 28:
             name = name[:25] + "…"
+        # O sufixo da página fica fora do corte: é ele que distingue os itens.
+        name += self.entry.page_label
         tag = "  [SVG]" if is_svg(self.entry.path) else ""
         ctk.CTkLabel(self, text=name + tag, anchor="w",
                      font=ctk.CTkFont(size=11)).grid(row=0, column=2,
@@ -1168,6 +1367,8 @@ class ImageListPanel(ctk.CTkFrame):
         types = [("Imagens", pats)]
         if SVG_BACKEND:
             types.append(("SVG", "*.svg"))
+        if PDF_OK:
+            types.append(("PDF", "*.pdf"))
         types.append(("Todos", "*.*"))
         return types
 
@@ -1201,14 +1402,20 @@ class ImageListPanel(ctk.CTkFrame):
         self._ingest(found)
 
     def _ingest(self, paths):
-        added = 0
-        for f in paths:
-            if Path(f).suffix.lower() in SUPPORTED_EXT:
-                self.entries.append(ImageEntry(f))
-                added += 1
-        if added:
+        items, skipped = plan_ingest(
+            paths, confirm_many=lambda name, n: messagebox.askyesno(
+                "PDF grande", f"Adicionar as {n} páginas de {name}?"))
+        for path, page, total in items:
+            self.entries.append(ImageEntry(path, page, total))
+        if items:
             self._refresh_rows()
             self.on_change()
+        if skipped:
+            # Uma mensagem só para o lote inteiro, não uma por arquivo.
+            messagebox.showwarning(
+                "Arquivos pulados",
+                "Não entraram na lista:\n" +
+                "\n".join(f"• {n}: {why}" for n, why in skipped))
 
     def _clear(self):
         if self.entries and messagebox.askyesno(
@@ -2091,7 +2298,8 @@ class PrintImposerApp(ctk.CTk):
             btn.pack(side="left", padx=1, pady=8)
             self._menu_buttons[title] = btn
         svg_note = f"SVG: {SVG_BACKEND}" if SVG_BACKEND else "SVG: indisponível"
-        ctk.CTkLabel(header, text=f"v{VERSION}   ·   {svg_note}",
+        pdf_note = f"PDF: {PDF_BACKEND}" if PDF_BACKEND else "PDF: indisponível"
+        ctk.CTkLabel(header, text=f"v{VERSION}   ·   {svg_note}   ·   {pdf_note}",
                      font=ctk.CTkFont(size=10),
                      text_color=("gray50", "gray50")).pack(side="right", padx=14)
 
@@ -2264,7 +2472,8 @@ class PrintImposerApp(ctk.CTk):
             "Imposição de páginas para impressão.\n\n"
             f"SVG: {svg}\n"
             f"Formatos extras: AVIF {'sim' if AVIF_OK else 'não'} · "
-            f"HEIC {'sim' if HEIF_OK else 'não'}\n"
+            f"HEIC {'sim' if HEIF_OK else 'não'} · "
+            f"PDF {'sim' if PDF_OK else 'não'}\n"
             f"Configuração: {SettingsStore.SETTINGS}")
 
     def _show_shortcut_dialog(self):

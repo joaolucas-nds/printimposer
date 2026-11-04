@@ -7,13 +7,13 @@
 ---
 
 ## Versão Atual
-**1.3.0** — 2026-11-03 — F4 etapa 1 **feita** (wo0005): PDF sem perda, compressão, espaçamento X/Y, folha no rodapé, AVIF/HEIC. Suíte verde (85 testes, 5 skips de SVG). Aguardando o dono abrir o PDF sem perda num leitor.
+**1.3.0** — 2026-11-03 — F4 etapa 1 **feita** (wo0005): PDF sem perda, compressão, espaçamento X/Y, folha no rodapé, AVIF/HEIC. Suíte verde (85 testes, 5 skips de SVG). Conferida na tela pelo dono em 04/11, inclusive o PDF sem perda num leitor.
 
 ## 🎯 Foco atual
 **Produto:** F4 etapa 1 (1.3.0) entregue. Próximo: etapa 2 (1.4.0), entrada PDF via `pypdfium2` (ROADMAP, escada C).
 **Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013).
 
-## ✅ Funcionando *(suíte headless verde; conferência visual do dono em 03/11)*
+## ✅ Funcionando *(suíte headless verde; conferência visual do dono em 04/11)*
 - Grade livre `cols × rows` até 12×12, com atalhos e miniatura do grid.
 - Lista de imagens com miniatura, quantidade, reordenação; "+ Arquivos" e "+ Pasta".
 - Ajuste fit / fill / stretch + Auto-Rotate.
@@ -39,8 +39,6 @@
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
 - [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho». O README hoje não tem imagens; com os prints, o chat os encaixa.
-- [ ] **Dono:** abrir um PDF sem perda gerado pela 1.3 num leitor de PDF (e, se a gráfica usa outro, nele também) e conferir que abre e que a folha está nítida.
-- [ ] **Chat:** README para a 1.3 (compressão, espaçamento X/Y, rodapé, AVIF/HEIC).
 - [ ] **Chat:** etapa 2 (1.4.0) — entrada PDF via `pypdfium2`.
 - [ ] Instalar um back-end de SVG no Windows e confirmar que o cabeçalho mostra o nome certo. `cairosvg` precisa de libcairo; `svglib` precisa de `rlPyCairo` — nenhum é 100% Python puro na hora de desenhar (ver FIX-002).
 - [ ] Avaliar `Image.draft()` também no caminho de composição (hoje só na miniatura).
@@ -53,3 +51,5 @@
 **2026-11-03** — Merge do KCM v1.133.0 fechado (DEC-012, DEC-013); F3 implementada pelo Code (wo0002, 1.2.0), conferida pelo dono e fechada pela wo0003 (rótulo cortado corrigido); README reescrito para a 1.2 (wo0004). Achado: no Windows `Path.home()` ignora `HOME` — teste do app isola com `USERPROFILE` (CONTEXT, armadilha 11). Próximo: ordem da F4.
 
 **2026-11-03 (noite)** — Ordem da F4 decidida (escada C, DEC-014) e etapa 1 implementada pelo Code (wo0005, 1.3.0): PDF sem perda por escritor próprio (sonda `pypdfium2`: 0 pixels de diferença), compressão escolhível, espaçamento X/Y, folha no rodapé, AVIF/HEIC. Pendente: o dono abrir o PDF num leitor.
+
+**2026-11-04** — Dono conferiu a 1.3.0 na tela (tudo certo, PDF sem perda abre num leitor). README atualizado para a 1.3 (wo0006). Regra nova no CEREBRO: WO que muda a interface já vai com o «Roteiro do dono». Próximo: etapa 2 da F4 (1.4.0), entrada PDF via `pypdfium2`.

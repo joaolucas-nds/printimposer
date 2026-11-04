@@ -1,4 +1,4 @@
-# 🖨 PrintImposer v1.2
+# 🖨 PrintImposer v1.3
 
 **Imposição de páginas para impressão em massa** — junte dezenas de imagens em folhas prontas para imprimir e cortar.
 
@@ -6,8 +6,8 @@ Você tem vários cards (por exemplo, A6 exportados do Figma) e quer imprimi-los
 
 - Grade livre de **colunas × linhas** (até 12 × 12), com atalhos prontos (2×2, 2×6, 4×3…)
 - **Guarda de qualidade**: avisa quando a imagem é pequena demais para a célula e vai perder nitidez
-- Saída **PNG** (padrão), **PDF**, **JPEG** ou **TIFF**, em até **dois destinos** ao mesmo tempo
-- Entrada PNG, JPEG, TIFF, BMP, WEBP, GIF — e **SVG**, quando há um back-end instalado
+- Saída **PNG** (padrão), **PDF sem perda**, **JPEG** ou **TIFF**, em até **dois destinos** ao mesmo tempo
+- Entrada PNG, JPEG, TIFF, BMP, WEBP, GIF, **AVIF** — e **SVG** e **HEIC**, quando há o extra instalado
 - **Presets** nomeados e configuração lembrada entre aberturas
 - Atalho `.bat` para abrir com dois cliques, sem janela de console
 
@@ -35,6 +35,15 @@ pip install svglib rlPyCairo
 
 No Windows, nenhum dos dois é 100% Python na hora de desenhar: o `cairosvg` precisa da biblioteca nativa **libcairo**, e o `svglib` precisa do `rlPyCairo`. O app testa se o back-end **desenha de verdade** antes de ligar o recurso. O cabeçalho mostra o resultado: `SVG: cairosvg`, `SVG: svglib` ou `SVG: indisponível`. Indisponível, o `.svg` simplesmente não aparece no seletor — nada quebra.
 
+### HEIC (opcional)
+Fotos de iPhone em `.heic`/`.heif` entram com:
+
+```
+pip install pillow-heif
+```
+
+Sem ele, esses arquivos só não aparecem no seletor. O **AVIF** não precisa de nada: o Pillow recente já lê sozinho. `Ajuda › Sobre` mostra a linha «Formatos extras: AVIF sim/não · HEIC sim/não».
+
 ### Abrir com dois cliques
 Use **`Opções › Criar atalho…`**. O diálogo explica o que o atalho faz e sugere salvá-lo na pasta **acima** da pasta do projeto (onde fica a pasta `printimposer`). O `.bat` gerado abre o app sem janela de console e grava caminhos absolutos — se você mover a pasta do projeto, gere outro.
 
@@ -43,7 +52,7 @@ Use **`Opções › Criar atalho…`**. O diálogo explica o que o atalho faz e 
 ## 🖥 A janela
 
 ```
-┌ PrintImposer   Arquivo  Opções  Ajuda              v1.2.0 · SVG: … ┐
+┌ PrintImposer   Arquivo  Opções  Ajuda              v1.3.0 · SVG: … ┐
 ├────────────┬──────────────────────────────┬────────────────────────┤
 │ Imagens    │ Grade (colunas × linhas)  ◼◼ │ Preview         ◀  ▶   │
 │            │ ┌ seções recolhíveis ──────┐ │                        │
@@ -55,6 +64,7 @@ Use **`Opções › Criar atalho…`**. O diálogo explica o que o atalho faz e 
 │            │ └──────────────────────────┘ │                        │
 │            │ 12 img · 4 por folha · 3 fl. │                        │
 │            │ ✔ Qualidade OK · Célula …    │                        │
+│            │ Folha: 2480 × 3508 px · …    │                        │
 ├────────────┴──────────────────────────────┴────────────────────────┤
 │ [Gerar Arquivos]  ███████████░░░░░                        Pronto   │
 └────────────────────────────────────────────────────────────────────┘
@@ -63,7 +73,7 @@ Use **`Opções › Criar atalho…`**. O diálogo explica o que o atalho faz e 
 A coluna do meio tem três zonas:
 - **Topo, sempre visível — a grade.** É o que muda a cada trabalho.
 - **Meio — seções recolhíveis.** Abra quantas quiser; o app lembra quais ficaram abertas. No primeiro uso só **Saída** vem aberta.
-- **Rodapé, sempre visível — o resumo:** quantas imagens, quantas por folha, quantas folhas, o tamanho da célula e o selo de qualidade.
+- **Rodapé, sempre visível — o resumo:** quantas imagens, quantas por folha, quantas folhas, o tamanho da célula, o selo de qualidade e o tamanho da folha (em px e em MB **bruto**, isto é, sem compressão — o arquivo final sai menor).
 
 ### Imagens (esquerda)
 | Elemento | O que faz |
@@ -96,9 +106,9 @@ Qualquer outra combinação até 12 × 12 funciona sem cadastro.
 |---|---|
 | **Papel e resolução** | A3, A4, A5, A6, Letter, Legal, Tabloid ou Custom (largura/altura em mm). DPI de 72 a 1200 — **300** é o padrão de impressão. |
 | **Ajuste da imagem** | *Ajustar (fit)* — imagem inteira, pode sobrar borda na cor de fundo · *Preencher (fill)* — preenche e recorta o excesso · *Esticar (stretch)* — força o tamanho, pode distorcer. **Auto-Rotate** gira a imagem quando a orientação dela não bate com a da célula. |
-| **Margens e espaçamento** | Margem externa e espaço entre imagens, em mm; cor de fundo das áreas vazias. |
+| **Margens e espaçamento** | Margem externa; espaço **entre colunas** e **entre linhas**, separados, em mm; cor de fundo das áreas vazias. |
 | **Linhas de corte** | Sólida, tracejada ou pontilhada; espessura em px, tamanho do traço e cor. As linhas atravessam a folha entre as colunas e linhas. |
-| **Saída** | Formato, prefixo, sufixo, pasta de saída e, se quiser, **uma cópia em outro destino**. |
+| **Saída** | Formato, **compressão/qualidade** (quando o formato tem), prefixo, sufixo, pasta de saída e, se quiser, **uma cópia em outro destino**. |
 
 ### Guarda de qualidade (rodapé)
 A folha é montada no DPI escolhido. Se a imagem tem menos pixels que a célula, ela é **ampliada** — e perde nitidez na impressão. O selo compara a pior imagem da lista com a célula:
@@ -119,12 +129,14 @@ Mostra a folha em baixa resolução, com o mesmo cálculo da saída final. Atual
 
 **Nomes dos arquivos:** `prefixo` + número de três dígitos + `sufixo` — por exemplo `folha_001.png`, `folha_002.png`. O PDF sai como um arquivo único, com todas as folhas. **Nada é sobrescrito:** se o nome já existe, o app acrescenta `_2`, `_3`…
 
-| Formato | Quando usar |
-|---|---|
-| **PNG** (padrão) | Sem perda; bom para imprimir em casa ou guardar. |
-| **PDF** | Mandar para gráfica ou imprimir direto — todas as folhas num arquivo. |
-| **JPEG** | Arquivo menor para compartilhar (com compressão). |
-| **TIFF** | Gráfica que pede TIFF; arquivo grande. |
+| Formato | Compressão | Quando usar |
+|---|---|---|
+| **PNG** (padrão) | sempre sem perda | Imprimir em casa ou guardar. |
+| **PDF** | **Sem perda** (padrão) ou **JPEG** com qualidade 50–100 | Mandar para gráfica ou imprimir direto — todas as folhas num arquivo. Sem perda tem a mesma qualidade do PNG; JPEG dá arquivo bem menor. |
+| **JPEG** | qualidade 50–100 (padrão 95) | Arquivo menor para compartilhar. |
+| **TIFF** | sempre sem perda (LZW) | Gráfica que pede TIFF; arquivo grande. |
+
+O campo «Qualidade» é um só: vale para o JPEG e para o PDF em modo JPEG.
 
 ---
 
@@ -136,7 +148,7 @@ Mostra a folha em baixa resolução, com o mesmo cálculo da saída final. Atual
 | **Opções** | **Presets ▸** (lista os salvos, *Salvar atual…*, *Excluir…*) · **Criar atalho…** · **Restaurar configurações padrão** |
 | **Ajuda** | Guia rápido: Figma → impressão · Sobre o PrintImposer (versão, back-end de SVG, onde ficam as configurações) |
 
-- **Presets** guardam o layout — grade, papel, DPI, ajuste, margens, corte, formato. Não guardam pastas: pasta é da máquina, não do layout.
+- **Presets** guardam o layout — grade, papel, DPI, ajuste, margens e espaçamentos, corte, formato, compressão e qualidade. Não guardam pastas: pasta é da máquina, não do layout. Presets da 1.2 (com um espaçamento só) abrem com o mesmo valor nos dois campos.
 - **Restaurar configurações padrão** volta o layout ao padrão e mantém as suas pastas.
 
 ---
@@ -151,7 +163,7 @@ Mostra a folha em baixa resolução, com o mesmo cálculo da saída final. Atual
    - **+ Pasta** → a pasta com os PNGs.
    - Grade **2 × 2** (atalho «4 por folha»), papel **A4**, **300 DPI**.
    - Ajuste **Ajustar (fit)** com **Auto-Rotate** ligado.
-   - Margem externa **0** (ou **5 mm** se a impressora não imprime até a borda) e **0** entre imagens.
+   - Margem externa **0** (ou **5 mm** se a impressora não imprime até a borda) e **0** entre colunas e entre linhas.
    - Confira o selo verde no rodapé e clique em **Gerar Arquivos**.
 3. **Na impressora**
    - Escolha **«Tamanho real» / 100 %**. Nunca «ajustar à página»: isso reescala a folha e o corte deixa de bater.
@@ -167,7 +179,10 @@ Sim, de propósito: as células sem imagem ficam na cor de fundo. A folha contin
 Pode. Use *Ajustar (fit)* para manter a proporção de cada uma e deixe o Auto-Rotate ligado.
 
 **O PDF serve para gráfica?**
-Serve para a maioria, desde que o selo de qualidade esteja verde. O PDF é **rasterizado** no DPI escolhido (é uma imagem por página, não vetor). Se a gráfica exige PDF vetorial, exporte direto do Figma.
+Serve para a maioria, desde que o selo de qualidade esteja verde. Desde a 1.3 o PDF sai **sem perda** por padrão — a mesma qualidade do PNG, num arquivo só. Ele é **rasterizado** no DPI escolhido (uma imagem por página, não vetor). Se a gráfica exige PDF vetorial, exporte direto do Figma.
+
+**Por que o PDF ficou maior que antes?**
+Até a 1.2 o PDF saía comprimido em JPEG por dentro, com perda, sem você escolher. Agora o padrão é sem perda. Para voltar a um arquivo pequeno, escolha **Compressão: JPEG** e ajuste a qualidade.
 
 **Posso usar SVG?**
 Sim, com um back-end instalado (ver *Instalação › SVG*). O SVG é desenhado já no tamanho da célula, sem perda.
@@ -196,4 +211,4 @@ O motor de composição (`ImpositionEngine`) não depende da interface: testes e
 
 ---
 
-*PrintImposer v1.2.0 — uso pessoal/profissional de impressão em massa.*
+*PrintImposer v1.3.0 — uso pessoal/profissional de impressão em massa.*

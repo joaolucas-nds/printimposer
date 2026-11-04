@@ -4,7 +4,8 @@
 > **Cresce**: entradas novas no topo. Registra só o que foi de fato concluído/entregue.
 
 ## [Não lançado]
-- (nada pendente.)
+### Documentação
+- README atualizado para a 1.3: PDF sem perda por padrão e compressão/qualidade por formato, espaçamento entre colunas e entre linhas, linha da folha no rodapé, AVIF nativo e HEIC opcional, e por que o PDF ficou maior que na 1.2.
 
 ---
 

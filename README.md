@@ -145,7 +145,7 @@ Mostra a folha em baixa resolução, com o mesmo cálculo da saída final. Atual
 | **JPEG** | qualidade 50–100 (padrão 95) | Arquivo menor para compartilhar. |
 | **TIFF** | sempre sem perda (LZW) | Gráfica que pede TIFF; arquivo grande. |
 | **WebP** | **Sem perda** ou **Com perda** com qualidade 50–100 | Compartilhar por mensagem ou e-mail: bem menor que PNG. Não é para gráfica. |
-| **AVIF** | qualidade 50–100 | Ainda menor que WebP; nem todo programa abre. Não é para gráfica. |
+| **AVIF** | qualidade 50–100 | Tamanho parecido com o WebP com perda (medido numa folha: 71 KB × 68 KB); nem todo programa abre. Não é para gráfica. |
 
 O campo «Qualidade» é um só: vale para o JPEG e para o PDF em modo JPEG.
 

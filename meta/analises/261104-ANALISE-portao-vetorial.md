@@ -1,6 +1,6 @@
 # ANALISE — Portão da imposição vetorial (F4, etapa 3)
 
-> **Status:** Em discussao — aguardando a sonda (seção «Medição pedida»)
+> **Status:** Em discussao — sonda 1 feita (04/11); falta a sonda 2, com os PDFs do Figma do dono (seção «Medição pedida 2»)
 > **Data:** 2026-11-04
 > **Elos:** ROADMAP F4 (escada C, etapa 3) · `meta/analises/261103-ANALISE-ordem-f4.md` · DEC-001, DEC-003, DEC-005, DEC-014 · IDEAS «Entrada vetorial → imposição vetorial»
 
@@ -63,3 +63,35 @@ Rode e devolva **número cru + o comando ou o trecho de script que o produziu**,
 5. **Entrada raster no modo vetorial:** com um PNG e um JPEG de teste, diga se cada protótipo consegue embutir o arquivo original como imagem escalada **sem reencodar** (compare os bytes da imagem embutida com os do arquivo) e o tamanho resultante.
 
 **O que esta sonda NÃO responde:** se a nitidez extra se vê no papel (isso é o dono, com os recortes e uma impressão de teste); se vale modularizar (decisão posterior); compatibilidade com o leitor de uma gráfica específica.
+
+---
+
+## Resultado da sonda 1 *(2026-11-04, `261104-2007-code-printimposer-probe-vetorial`, arquivado em `zz_notas-arquivadas/`)*
+
+| Critério | Resultado | Situação |
+|---|---|---|
+| 1. N-up correto (posição, escala, giro, recorte) | os dois protótipos geraram os 6 casos; melhor deslocamento (0,0) em 11/12. `pypdf` acertou de primeira; `pypdfium2` errou a matriz duas vezes antes de acertar (o «erra calado» previsto nos riscos) | ✅ |
+| 2. Diferença ≤ 2/255 + ganho visível | 0,63 a 1,56 em 11/12; `vec` 2×2 Preencher 2,171 (1,29 com deslocamento de 2 px — arredondamento de posição do motor raster, não erro de recorte). **Olho do dono: «em todos é perceptível»** — o raster incomoda, inclusive nos cartazes | ✅ |
+| 3. Arquivo ≤ 1/3 do raster sem perda a 300 DPI | PDF vetorial sintético: **0,008 a 0,036**. Cartazes do jsPDF: **0,890 a 3,892** — porque são **só foto JPEG** (0 caracteres de texto, ~225 ppi) e o jsPDF compartilha as imagens entre páginas, que a cópia duplica; com deduplicação (`pypdf`), 0,413 | ✅ no vetor, ❌ nos cartazes |
+
+**Achados que ficam, qualquer que seja o desfecho:**
+- **Biblioteca:** `pypdf` (wheel puro, `py3-none-any`) — acertou de primeira, honra o recorte pela CropBox sem pré-translação, deduplica imagens repetidas e permite embutir PNG (IDAT + Predictor 15) e JPEG **sem reencodar**. O `pypdfium2` serve, mas não embute PNG sem reencodar (saiu 1,41× o PNG) e não tem clip por objeto.
+- **Nos cartazes (foto), o ganho é de qualidade, não de tamanho:** o vetorial guarda o JPEG original byte a byte; o raster reamostra 225 → 300 ppi e regrava. É essa a diferença que o dono viu.
+- **Dedup é obrigatório** num modo vetorial: sem ele, PDF de gerador web que compartilha imagens sai até 3,9× maior.
+
+**Leitura do critério:** pelo texto fixado antes de medir, C pede as três condições — o 3 falhou nos únicos PDFs reais medidos, que **não eram vetoriais**. O próprio «melhor argumento contra» desta análise previa isso («outra ferramenta, como Figma ou Affinity, pode ter perfil diferente»). O dono tem agora PDFs reais do Figma em `../este/`. **Não mudar o critério; medir a fonte certa:** a sonda 2 roda o critério 3 nos PDFs do Figma. Se passar, C; se não, B. A decisão final continua sendo do dono.
+
+## Medição pedida 2 *(para o Claude Code — não é WO: não edita o repo, não commita)*
+
+Mesmas regras da medição 1 (número cru + comando; `USERPROFILE`/`HOME` temporários; `pypdf` só em pasta temporária; relatório em `../AAMMDD-HHMM-code-printimposer-probe-vetorial2.txt`; recortes em `../261104-SONDA-vetorial/figma/`). Só o protótipo **`pypdf`**, com `compress_identical_objects(remove_identicals=True, remove_orphans=True)` antes de salvar.
+
+Insumos (só leitura): os 5 PDFs de `../este/` (`260528-Fecha mes.pdf`, `260528-Fecha mes-1.pdf`, `A4-.pdf`, `OFERTAS 2xx.pdf`, `OFERTAS 5x.pdf`). Medido pelo chat por contagem de bytes, a confirmar: produtor «Figma», PDF 1.7, 1 página A4 cada, 0 `/DCTDecode`, 0 `/FontFile*`, 2 `/Subtype /Image` (Flate) por arquivo, operadores de texto presentes. Os `.png` homônimos são os exports PNG do mesmo frame — use-os como referência do que o dono vê.
+
+1. **Inventário por arquivo:** caracteres extraíveis (`count_chars`); objetos por tipo (texto, path, imagem, form); as 2 imagens: px, caixa em pt, % da página, filtro; o texto é fonte (Type3? sem embutir?) ou contorno.
+2. **Folhas:** 1×2 com Auto-Rotate e 2×2 Preencher (mesmas margens da sonda 1), com os 5 PDFs como entrada (repita para fechar a grade).
+3. **Critério 3:** bytes do vetorial (com dedup) × raster sem perda do app a 300 DPI, mesma grade; razão.
+4. **Critério 2:** diferença média por pixel (render 300 DPI) e recortes 600 DPI de um trecho com texto, raster à esquerda e vetorial à direita, nomes como na sonda 1.
+5. Tempo de geração de cada lado.
+
+**O que esta sonda NÃO responde:** impressão no papel; leitor da gráfica; Affinity/Canva/Corel (só Figma).
+

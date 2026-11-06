@@ -7,13 +7,13 @@
 ---
 
 ## Versão Atual
-**1.5.0** — 2026-11-04 — Saída WebP e AVIF (para compartilhar), guarda de qualidade olhando as imagens dentro do PDF, SVG rasterizado na orientação final e respeitando o modo de ajuste. Suíte verde (136 testes; 5 skips de SVG). Roteiro do dono da 1.5.0 pendente.
+**1.5.0** — 2026-11-04 — Saída WebP e AVIF (para compartilhar), guarda de qualidade olhando as imagens dentro do PDF, SVG rasterizado na orientação final e respeitando o modo de ajuste. Suíte verde (136 testes; 5 skips de SVG). Roteiro do dono feito em 04/11: tudo certo.
 
 ## 🎯 Foco atual
-**Produto:** 1.5.0 entregue (wo0009); falta o roteiro do dono. Em paralelo: sonda do portão da imposição vetorial (`meta/analises/261104-ANALISE-portao-vetorial.md`).
+**Produto:** F4 etapa 4 (1.6.0, wo0010) — marcas de canto e sangria; fecha a F4. Portão vetorial decidido em 06/11: **B** (vetorial vai para a F5, DEC-015).
 **Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013). WO que muda a interface traz o roteiro do dono **no chat** e a linha `/apply-wo` em bloco cercado.
 
-## ✅ Funcionando *(suíte headless verde; roteiro do dono da 1.4.1 feito em 04/11, tudo certo; a 1.5.0 aguarda o roteiro)*
+## ✅ Funcionando *(suíte headless verde; roteiro do dono da 1.5.0 feito em 04/11, tudo certo)*
 - Grade livre `cols × rows` até 12×12, com atalhos e miniatura do grid.
 - Lista de imagens com miniatura, quantidade, reordenação; "+ Arquivos" e "+ Pasta".
 - Ajuste fit / fill / stretch + Auto-Rotate.
@@ -34,27 +34,21 @@
 - Barra inferior mostra «Também grava em: …» com o segundo destino ligado (âmbar se inexistente ou temporário).
 
 ## 🔧 Em Progresso
-- Sonda do portão da imposição vetorial (pedida na análise de 04/11), ainda não rodou.
+- F4 etapa 4 (1.6.0, wo0010, Parte B).
 
 ## ❌ Quebrado / Com Problema
 - (nada conhecido.)
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
-- [ ] **Dono:** roteiro da 1.5.0 (no chat da wo0009; cópia no fim do arquivo da WO).
-- [ ] **Chat + dono:** portão da imposição vetorial (F4, etapa 3) — análise com sonda própria.
+- [ ] **Chat:** marcar a F4 🟢 no ROADMAP depois do roteiro do dono da 1.6.0; planejar a F5 (moldura, drag-and-drop, `.exe`, vetorial).
+- [ ] **Dono (opcional):** impressão de teste raster × vetorial numa **gráfica** de ponta (em casa, 06/11, a diferença só aparece de muito perto). Se o texto raster sair mole, reabre a vetorial (gatilho da DEC-015).
 - [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho».
-- [ ] **Dono:** colar o `INSTRUCOES-DO-PROJETO.md` do repo no painel do Projeto — mudou de novo em 04/11 (linha do `/apply-wo` e do roteiro).
+- [ ] **Dono:** colar o `INSTRUCOES-DO-PROJETO.md` do repo no painel do Projeto — mudou em 04/11 (linha do `/apply-wo` e do roteiro).
 - [ ] **Dono:** limpar `.claude/settings.local.json` (≈20 permissões avulsas dos testes de julho; agora ignorado pelo git).
 
 ## 💬 Última conversa
 
-**2026-11-04** — Dono conferiu a 1.3.0 na tela (tudo certo, PDF sem perda abre num leitor). README atualizado para a 1.3 (wo0006). Regra nova no CEREBRO: WO que muda a interface já vai com o «Roteiro do dono». Próximo: etapa 2 da F4 (1.4.0), entrada PDF via `pypdfium2`.
+**2026-11-04 (madrugada 2)** — Code aplicou a wo0009: commit A de docs (`f2ec5fe`) e a 1.5.0 (WebP/AVIF, guarda dentro do PDF, SVG na orientação final). 111 → 136 testes. Cartazes reais do dono: selo verde (razão 2,12 a 150 DPI e 1,06 a 300 DPI).
 
-**2026-11-04 (tarde)** — Etapa 2 implementada pelo Code (wo0007, 1.4.0): entrada PDF por `pypdfium2`, página = item, render na orientação final (sem ampliação). Sonda real: página paisagem em célula retrato pediu a caixa (1754, 1240) e saiu 1748×1241. Suspeita do SVG com Auto-Rotate registrada.
-
-**2026-11-04 (noite)** — Roteiro da 1.4.0 feito pelo dono com PDFs reais (tudo certo). Curadoria: IDEAS (10 ideias mudaram de seção, etiquetas de fase corrigidas, «Figma» generalizado), ROADMAP (F4 por etapas, 1.4.1 intercalada), CONTEXT e README sem amarrar a uma ferramenta. Regras corrigidas no CEREBRO: roteiro do dono **no chat**; `/apply-wo` em bloco cercado. Próximo: 1.4.1 de robustez (wo0008).
-
-**2026-11-04 (madrugada)** — Code aplicou a wo0008: commit A de docs (`29bfe23`), tags `v1.0.0`…`v1.4.0` e a 1.4.1 (erro de abertura visível, aviso do 2º destino, config congelada na geração, guia rápido). 100 → 111 testes. Próximo: roteiro do dono.
-
-**2026-11-04 (madrugada 2)** — Code aplicou a wo0009: commit A de docs (`f2ec5fe`) e a 1.5.0 (WebP/AVIF, guarda dentro do PDF, SVG na orientação final). 111 → 136 testes. Cartazes reais do dono: selo verde (razão 2,12 a 150 DPI e 1,06 a 300 DPI). Próximo: roteiro do dono; sonda do portão vetorial.
+**2026-11-06** — Portão vetorial decidido **B** com duas sondas (jsPDF e Figma): N-up correto e nitidez visível, mas o arquivo vetorial não fica ≤ 1/3 do raster (0,41–4,0×). Teste de papel em casa: diferença só de muito perto. Vetorial vai para a F5 (DEC-015). Spec da etapa 4 escrita (marcas + sangria). Próximo: wo0010.

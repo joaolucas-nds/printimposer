@@ -117,3 +117,5 @@ Insumos (só leitura): os 5 PDFs de `../este/` (`260528-Fecha mes.pdf`, `260528-
 
 **Gatilho de reabertura (o que a sonda não respondeu):** **o papel.** O critério 2 foi visto na tela, num recorte a 600 DPI. Se uma **impressão de teste** da mesma folha — raster do app a 300 DPI × vetorial — mostrar o texto do raster visivelmente mais mole no papel, na impressora de casa ou na gráfica, a vetorial sobe da F5 para logo depois da etapa 4. Teste de bolso: imprimir as duas versões da folha `figma-1x2` da sonda 2 e comparar com lupa ou a olho a 30 cm.
 
+**Teste de papel, impressora de casa (2026-11-06)** [relatado pelo dono]: imprimiu as duas versões da folha `figma-1x2` da sonda 2; a diferença «só se eu olhar com bastante atenção e próximo». O gatilho **não disparou**; B fica. **Não testado:** impressão numa gráfica de ponta — se um dia for feita e o texto raster aparecer mole, o gatilho vale do mesmo jeito.
+

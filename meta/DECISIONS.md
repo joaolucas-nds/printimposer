@@ -366,3 +366,23 @@ O PDF passa a ser escrito por uma função própria, só com a biblioteca padrã
 - **Solução:** `svg_intrinsic_size` (width/height, viewBox ou medida do back-end) dá a proporção; `vector_render_box` (regra única, também usada pelo PDF) gira a caixa; `rasterize_svg` segue fit/fill/stretch como o `rasterize_pdf`.
 - **Guarda de regressão:** `SvgFinalOrientationTests`, com stub do rasterizador (sem back-end). Back-end real não ligou nesta máquina (`libcairo` ausente), então a prova é o stub.
 - **Lição:** ao dar à fonte vetorial a caixa de render, a orientação e o modo de ajuste valem para TODA fonte vetorial — conserto num formato (PDF, 1.4.0) pede a conferência do irmão.
+
+---
+
+## DEC-015 — Imposição vetorial do PDF vai para a F5 (portão da F4, opção B)
+**Data:** 2026-11-06 · **Status:** aceita
+
+### Contexto
+O portão da etapa 3 da F4 perguntava se a saída PDF devia posicionar as páginas de entrada sem rasterizar. Critério fixado antes de medir (`meta/analises/261104-ANALISE-portao-vetorial.md`): C (agora) exigia (1) N-up correto, (2) diferença ≤ 2/255 com ganho visível e (3) arquivo vetorial ≤ 1/3 do raster sem perda a 300 DPI. Duas sondas: cartazes do jsPDF (só foto JPEG, 0 caracteres de texto) e 5 PDFs do Figma (texto Type3 + uma imagem de logo de 404 KB por arquivo).
+
+### Decisão
+**Opção B:** a imposição vetorial vai para a F5, como segundo desenhista sobre a geometria em mm que a etapa 4 cria. A etapa 4 (marcas e sangria) vem primeiro, no motor raster.
+
+### Alternativas consideradas
+- **C — agora, como modo «Vetorial» no PDF** — critérios 1 e 2 passaram (os dois protótipos montaram as folhas; o dono viu a diferença em todos os recortes), mas o 3 falhou nas duas fontes reais: jsPDF 0,89–3,89× (0,41× com dedup), Figma 1,87–4,00× (0,57–1,12× com 3 passadas de dedup). O peso dos PDFs do dono é bitmap embutido; o ganho é nitidez do texto, não tamanho.
+- **A — descartar** — os protótipos funcionaram e o ganho de nitidez é real; descartar jogaria fora evidência boa.
+
+### Consequências
+- Biblioteca para quando voltar: `pypdf` (acertou de primeira, preserva bytes de JPEG e PNG, deduplica com passadas repetidas). O `pypdfium2` errou a matriz duas vezes e não embute PNG sem reencodar.
+- Teste de papel em casa (06/11): diferença só de muito perto. **Gatilho de reabertura:** impressão numa gráfica de ponta mostrar o texto raster visivelmente mole.
+- O DEC-001 («qualidade perfeita e arquivos minúsculos») vale pela metade para o conteúdo do dono: qualidade sim, tamanho não.

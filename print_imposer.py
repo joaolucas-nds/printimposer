@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PrintImposer v1.5.0
+PrintImposer v1.6.0
 Ferramenta de Imposição de Páginas para Impressão em Massa
 
 Selecione imagens, configure o layout e gere PDFs/PNGs prontos para impressão.
@@ -46,6 +46,16 @@ Novidades da 1.5.0:
   - A guarda de qualidade olha as imagens embutidas nas páginas de PDF
   - SVG rasterizado já na orientação final e respeitando o modo de ajuste
     (antes saía ampliado com Auto-Rotate e no modo Preencher)
+
+Novidades da 1.6 (fase F4, etapa 4 — SPEC-F4-etapa4):
+  - Marcas de canto na margem externa, uma por ponta de cada linha de corte
+  - Sangria em mm, em dois modos: estender a borda (espelhar) ou a arte já
+    traz a sangria; limitada ao espaço entre as células
+  - Avisos (margem curta para as marcas, espaçamento menor que 2× a sangria)
+    e confirmação antes de gerar
+  - Seção «Linhas de corte» virou «Corte e sangria»; `cut_lines` virou
+    `cut_guide` (config e presets antigos continuam abrindo)
+  - Geometria de corte calculada em mm (`sheet_geometry`), separada do desenho
 """
 
 import os
@@ -198,7 +208,7 @@ HEIF_OK: bool = _probe_heif()
 # CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION  = "1.5.0"
+VERSION  = "1.6.0"
 APP_NAME = "PrintImposer"
 MM_TO_INCH = 1.0 / 25.4
 
@@ -248,7 +258,20 @@ NUP_SHORTCUTS: Dict[str, Tuple[int, int]] = {
 }
 
 LINE_STYLES  = ["Sólida", "Tracejada", "Pontilhada"]
-FIT_LABELS   = ["Ajustar (fit)", "Preencher (fill)", "Esticar (stretch)"]
+
+# Guia de corte: chave persistida → rótulo na UI (substitui o antigo `cut_lines`).
+CUT_GUIDE_KEYS   = ["none", "lines", "marks"]
+CUT_GUIDE_LABELS = ["Nenhuma", "Linhas atravessando", "Marcas de canto"]
+# Sangria: chave persistida → rótulo na UI.
+BLEED_MODE_KEYS   = ["mirror", "included"]
+BLEED_MODE_LABELS = ["Estender a borda (espelhar)", "A arte já tem sangria"]
+# Faixas aceitas (valor fora é ajustado ao limite) e padrões de mercado.
+MARK_LEN_RANGE    = (1.0, 15.0)    # mm
+MARK_OFFSET_RANGE = (0.0, 15.0)    # mm
+MARK_WIDTH_RANGE  = (0.1, 2.0)     # pt
+BLEED_RANGE       = (0.0, 10.0)    # mm
+MARK_COLOR = (0, 0, 0)             # preto 100%
+FIT_LABELS  = ["Ajustar (fit)", "Preencher (fill)", "Esticar (stretch)"]
 FIT_KEYS     = ["fit",           "fill",              "stretch"]
 def build_out_formats(can_save=_probe_can_save) -> List[str]:
     """Formatos de saída oferecidos: WEBP e AVIF só se o Pillow GRAVA de fato."""
@@ -814,6 +837,17 @@ def clamp_jpeg_quality(value: Any, default: int = 95) -> int:
         return default
 
 
+def clamp_float(value: Any, lo: float, hi: float, default: float) -> float:
+    """Número ajustado a [lo, hi]; valor ilegível (ou NaN) cai no `default`."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return default
+    if v != v:
+        return default
+    return max(lo, min(hi, v))
+
+
 class LayoutConfig:
     """Estado completo de configuração. Serializa para JSON (presets e settings)."""
 
@@ -822,9 +856,10 @@ class LayoutConfig:
         "cols", "rows", "paper_key", "paper_w_mm", "paper_h_mm", "dpi",
         "margin_outer_mm", "margin_between_x_mm", "margin_between_y_mm",
         "bg_color", "fit_mode",
-        "auto_rotate", "cut_lines", "cut_color", "cut_width_px", "cut_style",
-        "cut_dash", "output_format", "output_prefix", "output_suffix",
-        "pdf_compression", "jpeg_quality", "webp_compression",
+        "auto_rotate", "cut_guide", "cut_color", "cut_width_px", "cut_style",
+        "cut_dash", "mark_length_mm", "mark_offset_mm", "mark_width_pt",
+        "bleed_mm", "bleed_mode", "output_format", "output_prefix",
+        "output_suffix", "pdf_compression", "jpeg_quality", "webp_compression",
     )
 
     def __init__(self):
@@ -841,11 +876,16 @@ class LayoutConfig:
         self.bg_color:         str   = "#FFFFFF"
         self.fit_mode:          str   = "fit"
         self.auto_rotate:       bool  = True
-        self.cut_lines:         bool  = False
+        self.cut_guide:         str   = "none"         # none | lines | marks
         self.cut_color:         str   = "#999999"
         self.cut_width_px:      int   = 1
         self.cut_style:         str   = "Sólida"
         self.cut_dash:          int   = 10
+        self.mark_length_mm:    float = 4.0            # marcas de canto
+        self.mark_offset_mm:    float = 3.0
+        self.mark_width_pt:     float = 0.25
+        self.bleed_mm:          float = 0.0            # 0 = sem sangria
+        self.bleed_mode:        str   = "mirror"       # mirror | included
         self.output_format:     str   = "PNG"          # PNG é o padrão agora
         self.output_prefix:     str   = "folha_"
         self.output_suffix:     str   = ""
@@ -869,9 +909,24 @@ class LayoutConfig:
             legacy = d.pop("margin_between_mm")
             d.setdefault("margin_between_x_mm", legacy)
             d.setdefault("margin_between_y_mm", legacy)
+        # Config/preset da 1.5 trazia `cut_lines` (bool): vira `cut_guide`, a menos
+        # que o dado já traga o campo novo (ele manda). Sem isto o corte ligado
+        # sumiria em silêncio ao abrir um preset antigo.
+        if "cut_lines" in d:
+            d = dict(d)
+            legacy_cut = d.pop("cut_lines")
+            d.setdefault("cut_guide", "lines" if legacy_cut else "none")
         for k, v in d.items():
             if hasattr(self, k):
                 setattr(self, k, v)
+        if self.cut_guide not in CUT_GUIDE_KEYS:
+            self.cut_guide = "none"
+        if self.bleed_mode not in BLEED_MODE_KEYS:
+            self.bleed_mode = "mirror"
+        self.mark_length_mm = clamp_float(self.mark_length_mm, *MARK_LEN_RANGE, 4.0)
+        self.mark_offset_mm = clamp_float(self.mark_offset_mm, *MARK_OFFSET_RANGE, 3.0)
+        self.mark_width_pt  = clamp_float(self.mark_width_pt, *MARK_WIDTH_RANGE, 0.25)
+        self.bleed_mm       = clamp_float(self.bleed_mm, *BLEED_RANGE, 0.0)
         self.jpeg_quality = clamp_jpeg_quality(self.jpeg_quality, self.jpeg_quality)
         if self.pdf_compression not in PDF_COMP_KEYS:
             self.pdf_compression = "lossless"
@@ -887,6 +942,126 @@ class LayoutConfig:
 
     def nup(self) -> int:
         return max(1, self.cols) * max(1, self.rows)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GEOMETRIA DE CORTE E SANGRIA (em mm, pura — F4 etapa 4)
+# ══════════════════════════════════════════════════════════════════════════════
+
+Rect = Tuple[float, float, float, float]          # (x0, y0, x1, y1) em mm
+Segment = Tuple[float, float, float, float]       # (x1, y1, x2, y2) em mm
+
+
+class SheetGeometry(NamedTuple):
+    """Tudo que o desenho precisa saber sobre corte e sangria, em mm.
+
+    `cells` e `bleeds` seguem a ordem dos slots (linha a linha). `bleed_sides` é a
+    sangria que COUBE em cada lado de cada célula: (esq, topo, dir, base).
+    `warnings` é uma lista de (nível, texto): «warn» (âmbar) ou «info» (cinza).
+    """
+    cells: List[Rect]
+    bleeds: List[Rect]
+    bleed_sides: List[Tuple[float, float, float, float]]
+    cut_x: List[float]
+    cut_y: List[float]
+    marks: List[Segment]
+    mark_offset: float          # distância efetiva: nunca menor que a sangria
+    grid: Rect                  # caixa que envolve todas as células
+    warnings: List[Tuple[str, str]]
+
+
+def _fmt_mm(v: float) -> str:
+    """Milímetro para aviso: sem zeros à toa («7», «1.5»)."""
+    return f"{round(v, 2):g}"
+
+
+def _unique_sorted(values: List[float]) -> List[float]:
+    """Posições de corte sem duplicata (células coladas dividem a mesma borda)."""
+    out: List[float] = []
+    for v in sorted(values):
+        if not out or abs(v - out[-1]) > 1e-6:
+            out.append(v)
+    return out
+
+
+def sheet_geometry(cfg: "LayoutConfig") -> SheetGeometry:
+    """Calcula em mm: retângulos de corte e de sangria, posições de corte, marcas e avisos.
+
+    Função pura (sem Tk, sem Pillow): o motor raster converte para px na hora de
+    desenhar, e o desenhista vetorial da F5 reusa a MESMA geometria (DEC-015).
+    A sangria nunca invade a célula vizinha (vai até metade do espaçamento) nem
+    passa da margem externa; as marcas ficam fora da grade, a `mark_offset` dela.
+    """
+    cols, rows = max(1, int(cfg.cols)), max(1, int(cfg.rows))
+    mo  = max(0.0, float(cfg.margin_outer_mm))
+    mbx = max(0.0, float(cfg.margin_between_x_mm))
+    mby = max(0.0, float(cfg.margin_between_y_mm))
+    cw = max(0.0, (cfg.paper_w_mm - 2 * mo - (cols - 1) * mbx) / cols)
+    ch = max(0.0, (cfg.paper_h_mm - 2 * mo - (rows - 1) * mby) / rows)
+
+    bleed = clamp_float(cfg.bleed_mm, *BLEED_RANGE, 0.0)
+    length = clamp_float(cfg.mark_length_mm, *MARK_LEN_RANGE, 4.0)
+    offset = max(clamp_float(cfg.mark_offset_mm, *MARK_OFFSET_RANGE, 3.0), bleed)
+
+    cells: List[Rect] = []
+    bleeds: List[Rect] = []
+    sides: List[Tuple[float, float, float, float]] = []
+    for row in range(rows):
+        for col in range(cols):
+            x0 = mo + col * (cw + mbx)
+            y0 = mo + row * (ch + mby)
+            cells.append((x0, y0, x0 + cw, y0 + ch))
+            l = min(bleed, mo if col == 0 else mbx / 2)
+            r = min(bleed, mo if col == cols - 1 else mbx / 2)
+            t = min(bleed, mo if row == 0 else mby / 2)
+            b = min(bleed, mo if row == rows - 1 else mby / 2)
+            sides.append((l, t, r, b))
+            bleeds.append((x0 - l, y0 - t, x0 + cw + r, y0 + ch + b))
+
+    gx0, gy0 = mo, mo
+    gx1 = mo + cols * cw + (cols - 1) * mbx
+    gy1 = mo + rows * ch + (rows - 1) * mby
+
+    cut_x = _unique_sorted([c[0] for c in cells] + [c[2] for c in cells])
+    cut_y = _unique_sorted([c[1] for c in cells] + [c[3] for c in cells])
+
+    marks: List[Segment] = []
+    if cfg.cut_guide == "marks":
+        for x in cut_x:        # traços verticais, acima e abaixo da grade
+            marks.append((x, gy0 - offset - length, x, gy0 - offset))
+            marks.append((x, gy1 + offset, x, gy1 + offset + length))
+        for y in cut_y:        # traços horizontais, à esquerda e à direita
+            marks.append((gx0 - offset - length, y, gx0 - offset, y))
+            marks.append((gx1 + offset, y, gx1 + offset + length, y))
+
+    warnings: List[Tuple[str, str]] = []
+    if cfg.cut_guide == "marks" and mo + 1e-9 < offset + length:
+        warnings.append(("warn", "A margem externa precisa de pelo menos "
+                                 f"{_fmt_mm(offset + length)} mm para as marcas."))
+    if bleed > 0:
+        for count, gap, nome in ((cols, mbx, "colunas"), (rows, mby, "linhas")):
+            if count > 1 and gap + 1e-9 < 2 * bleed:
+                warnings.append(("warn",
+                                 f"Espaçamento entre {nome} menor que 2× a sangria: "
+                                 f"entre as {nome} coube {_fmt_mm(gap / 2)} mm."))
+        if cfg.cut_guide == "lines":
+            warnings.append(("info", "Com sangria, use marcas de canto: "
+                                     "as linhas riscam a sangria."))
+
+    return SheetGeometry(cells, bleeds, sides, cut_x, cut_y, marks, offset,
+                         (gx0, gy0, gx1, gy1), warnings)
+
+
+def cut_confirm_text(cfg: "LayoutConfig") -> Optional[str]:
+    """Texto da confirmação antes de gerar quando há aviso âmbar de corte; None se não há.
+
+    Só os avisos âmbar pedem confirmação (marcas que não cabem, sangria que não
+    cabe); o aviso cinza das linhas com sangria apenas informa.
+    """
+    amber = [t for lvl, t in sheet_geometry(cfg).warnings if lvl == "warn"]
+    if not amber:
+        return None
+    return "\n".join(amber) + "\n\nGerar mesmo assim?"
 
 
 def snapshot_for_generation(entries: List["ImageEntry"],
@@ -1091,6 +1266,14 @@ class ImpositionEngine:
               - (rows-1)*self.cfg.margin_between_y_mm) / rows
         return max(0.0, cw), max(0.0, ch)
 
+    def bleed_px(self, dpi: Optional[int] = None) -> int:
+        """Sangria configurada em px (0 = desligada), sem recorte pelo espaço livre."""
+        return self._mm_px(clamp_float(self.cfg.bleed_mm, *BLEED_RANGE, 0.0), dpi)
+
+    def bleed_px_included(self, dpi: Optional[int] = None) -> int:
+        """Sangria que aumenta a caixa de encaixe: só no modo «A arte já tem sangria»."""
+        return self.bleed_px(dpi) if self.cfg.bleed_mode == "included" else 0
+
     def sheet_info(self, dpi: Optional[int] = None) -> Tuple[int, int, float]:
         """(largura px, altura px, MB bruto) da folha. Bruto = RGB sem compressão:
         o tamanho comprimido depende do conteúdo, então não é estimado."""
@@ -1126,6 +1309,9 @@ class ImpositionEngine:
         pela pior razão delas (sem `pypdfium2` ou com PDF ilegível o item sai da guarda).
         """
         cw, ch = self.cell_px()
+        # «A arte já tem sangria»: a fonte cobre a célula AUMENTADA pela sangria.
+        bp = self.bleed_px_included()
+        cw, ch = cw + 2 * bp, ch + 2 * bp
         worst_ratio = None
         worst_name  = ""
 
@@ -1257,6 +1443,72 @@ class ImpositionEngine:
             y = mo + r * ch + (r - 1) * mby + (mby // 2 if mby > 0 else 0)
             fn(0, y, pw, y)
 
+    @staticmethod
+    def _mirror_extend(cell: Image.Image, l: int, t: int, r: int, b: int) -> Image.Image:
+        """Acrescenta em volta da célula faixas com a borda espelhada (sangria «espelhar»).
+
+        Primeiro estende na horizontal e depois na vertical sobre o resultado: os
+        cantos saem espelhados nos dois eixos. Faixa maior que a célula é limitada a ela.
+        """
+        cw, ch = cell.size
+        l, r = min(l, cw), min(r, cw)
+        t, b = min(t, ch), min(b, ch)
+        if not (l or t or r or b):
+            return cell
+        flip_h, flip_v = Image.FLIP_LEFT_RIGHT, Image.FLIP_TOP_BOTTOM
+        ww = l + cw + r
+        wide = Image.new("RGB", (ww, ch))
+        wide.paste(cell, (l, 0))
+        if l:
+            wide.paste(cell.crop((0, 0, l, ch)).transpose(flip_h), (0, 0))
+        if r:
+            wide.paste(cell.crop((cw - r, 0, cw, ch)).transpose(flip_h), (l + cw, 0))
+        out = Image.new("RGB", (ww, t + ch + b))
+        out.paste(wide, (0, t))
+        if t:
+            out.paste(wide.crop((0, 0, ww, t)).transpose(flip_v), (0, 0))
+        if b:
+            out.paste(wide.crop((0, ch - b, ww, ch)).transpose(flip_v), (0, t + ch))
+        return out
+
+    def _draw_marks(self, page: Image.Image, geo: SheetGeometry, dpi: int,
+                    grid_px: Tuple[int, int, int, int]):
+        """Desenha as marcas de canto (preto, espessura em pt) a partir da geometria em mm.
+
+        O arredondamento para px é feito AQUI, por marca — nunca somando px de
+        célula em célula. O fim interno de cada traço é recuado para fora da sangria
+        em px, medida a partir da grade REAL em px (`grid_px`): o arredondamento de
+        mm podia encostar 1 px na sangria.
+        """
+        s = dpi * MM_TO_INCH
+
+        def px(v: float) -> int:
+            return int(math.floor(v * s + 0.5))
+
+        w = max(1, int(round(self.cfg.mark_width_pt * dpi / 72)))
+        bp = self.bleed_px(dpi)
+        gx0, gy0, gx1, gy1 = grid_px
+        draw = ImageDraw.Draw(page)
+        for x1, y1, x2, y2 in geo.marks:
+            if x1 == x2:                                   # vertical
+                xl = px(x1) - w // 2
+                ya, yb = sorted((px(y1), px(y2)))
+                if y2 <= geo.grid[1]:                      # acima da grade
+                    yb = min(yb, gy0 - bp)
+                else:                                      # abaixo
+                    ya = max(ya, gy1 + bp)
+                if yb > ya:
+                    draw.rectangle([xl, ya, xl + w - 1, yb - 1], fill=MARK_COLOR)
+            else:                                          # horizontal
+                yt = px(y1) - w // 2
+                xa, xb = sorted((px(x1), px(x2)))
+                if x2 <= geo.grid[0]:                      # à esquerda
+                    xb = min(xb, gx0 - bp)
+                else:                                      # à direita
+                    xa = max(xa, gx1 + bp)
+                if xb > xa:
+                    draw.rectangle([xa, yt, xb - 1, yt + w - 1], fill=MARK_COLOR)
+
     def compose_page(self, page_idx: int, image_paths: List[Any],
                      override_dpi: Optional[int] = None) -> Image.Image:
         """Compõe uma folha no DPI pedido (ou no do config).
@@ -1273,9 +1525,23 @@ class ImpositionEngine:
         mbx    = self._mm_px(cfg.margin_between_x_mm, override_dpi)
         mby    = self._mm_px(cfg.margin_between_y_mm, override_dpi)
         cw, ch = self.cell_px(override_dpi)
+        dpi    = override_dpi or cfg.dpi
 
         bg   = self._hex_rgb(cfg.bg_color)
         page = Image.new("RGB", (pw, ph), bg)
+
+        # Posição das células vem da geometria em mm, arredondada UMA vez por célula
+        # (somar px arredondados célula a célula acumula erro). O tamanho continua o
+        # de `cell_px`, que é o que a guarda de qualidade e os rasterizadores usam.
+        geo = sheet_geometry(cfg)
+        s   = dpi * MM_TO_INCH
+
+        def px(v: float) -> int:
+            return int(math.floor(v * s + 0.5))
+
+        org_x = [px(c[0]) for c in geo.cells]
+        org_y = [px(c[1]) for c in geo.cells]
+        bp_full = self.bleed_px(dpi)
 
         start = page_idx * nup
         for slot in range(nup):
@@ -1285,25 +1551,55 @@ class ImpositionEngine:
 
             col = slot % cols
             row = slot // cols
-            x   = mo + col * (cw + mbx)
-            y   = mo + row * (ch + mby)
+            x   = org_x[slot]
+            y   = org_y[slot]
+
+            # Sangria que coube em cada lado, em px: a da geometria, limitada ao vão
+            # REAL em px (metade dele entre células; a margem na borda da folha).
+            l = t = r = b = 0
+            if bp_full > 0:
+                sl, st, sr, sb = (px(v) for v in geo.bleed_sides[slot])
+                l = min(sl, x if col == 0 else (x - (org_x[slot - 1] + cw)) // 2)
+                r = min(sr, pw - (x + cw) if col == cols - 1
+                        else (org_x[slot + 1] - (x + cw)) // 2)
+                t = min(st, y if row == 0 else (y - (org_y[slot - cols] + ch)) // 2)
+                b = min(sb, ph - (y + ch) if row == rows - 1
+                        else (org_y[slot + cols] - (y + ch)) // 2)
+                l, t, r, b = max(0, l), max(0, t), max(0, r), max(0, b)
 
             try:
                 # SVG/PDF rasterizam direto no tamanho da célula: zero upscale.
                 src  = as_ref(image_paths[idx])
-                img  = open_source(src.path, cw, ch, page=src.page,
-                                   auto_rotate=cfg.auto_rotate,
-                                   fit_mode=cfg.fit_mode)
-                cell = self._place_image(img, cw, ch, bg)
+                if bp_full > 0 and cfg.bleed_mode == "included":
+                    # A arte traz a sangria: encaixa na célula AUMENTADA e recorta o
+                    # que cabe — a parte de dentro cai exatamente no corte.
+                    bw, bh = cw + 2 * bp_full, ch + 2 * bp_full
+                    img  = open_source(src.path, bw, bh, page=src.page,
+                                       auto_rotate=cfg.auto_rotate,
+                                       fit_mode=cfg.fit_mode)
+                    big  = self._place_image(img, bw, bh, bg)
+                    cell = big.crop((bp_full - l, bp_full - t,
+                                     bp_full + cw + r, bp_full + ch + b))
+                else:
+                    img  = open_source(src.path, cw, ch, page=src.page,
+                                       auto_rotate=cfg.auto_rotate,
+                                       fit_mode=cfg.fit_mode)
+                    cell = self._mirror_extend(self._place_image(img, cw, ch, bg),
+                                               l, t, r, b)
             except Exception:
+                l = t = 0
                 cell = Image.new("RGB", (cw, ch), (200, 190, 190))
                 ImageDraw.Draw(cell).text(
                     (4, max(0, ch // 2 - 8)), "Erro ao carregar", fill=(160, 30, 30))
 
-            page.paste(cell, (x, y))
+            page.paste(cell, (x - l, y - t))
 
-        if cfg.cut_lines:
+        if cfg.cut_guide == "lines":
             self._draw_cuts(page, cols, rows, cw, ch, mo, mbx, mby)
+        elif cfg.cut_guide == "marks":
+            self._draw_marks(page, geo, dpi,
+                             (min(org_x), min(org_y),
+                              max(org_x) + cw, max(org_y) + ch))
 
         return page
 
@@ -2022,30 +2318,92 @@ class ConfigPanel(ctk.CTkFrame):
         self._bg_btn.grid(row=3, column=1, sticky="w", padx=4, pady=2)
 
         # ── CORTE ──
-        f4 = self._acc_section("corte", "Linhas de corte")
-        self._cuts_var = tk.BooleanVar(value=self.cfg.cut_lines)
-        ctk.CTkCheckBox(f4, text="Habilitar linhas de corte", variable=self._cuts_var,
-                        command=self._on_cuts).grid(row=0, column=0, columnspan=2,
-                                                    sticky="w", padx=4, pady=2)
-        self._lbl(f4, "Estilo:", 1)
+        # Seção «Corte e sangria» (a chave `corte` é a de sempre: o accordion
+        # persistido não muda, só o título). Linhas 1–4 só com «Linhas atravessando»;
+        # 5–7 só com «Marcas de canto»; o modo da sangria só com sangria > 0.
+        f4 = self._acc_section("corte", "Corte e sangria")
+        self._lbl(f4, "Guia de corte:", 0)
+        self._guide_var = tk.StringVar(
+            value=CUT_GUIDE_LABELS[CUT_GUIDE_KEYS.index(self.cfg.cut_guide)])
+        ctk.CTkOptionMenu(f4, variable=self._guide_var, values=CUT_GUIDE_LABELS,
+                          command=lambda _: self._on_cuts(), width=160).grid(
+            row=0, column=1, sticky="w", padx=4)
+
+        def _row(text, row, group):
+            """Rótulo de uma linha que entra num grupo mostrável/escondível."""
+            lbl = ctk.CTkLabel(f4, text=text, anchor="w", font=ctk.CTkFont(size=11))
+            lbl.grid(row=row, column=0, sticky="w", padx=4, pady=2)
+            group.append(lbl)
+
+        self._cut_line_widgets: List[Any] = []
+        self._cut_mark_widgets: List[Any] = []
+
+        _row("Estilo:", 1, self._cut_line_widgets)
         self._cut_style_var = tk.StringVar(value=self.cfg.cut_style)
-        ctk.CTkOptionMenu(f4, variable=self._cut_style_var, values=LINE_STYLES,
-                          command=lambda _: self._on_cut_opts(), width=120).grid(
-            row=1, column=1, sticky="w", padx=4)
+        w = ctk.CTkOptionMenu(f4, variable=self._cut_style_var, values=LINE_STYLES,
+                              command=lambda _: self._on_cut_opts(), width=120)
+        w.grid(row=1, column=1, sticky="w", padx=4)
+        self._cut_line_widgets.append(w)
 
-        self._lbl(f4, "Espessura (px):", 2)
+        _row("Espessura (px):", 2, self._cut_line_widgets)
         self._cut_w_var = tk.StringVar(value=str(self.cfg.cut_width_px))
-        self._num_entry(f4, self._cut_w_var, 2, cb=lambda _: self._on_cut_opts())
+        self._cut_line_widgets.append(
+            self._num_entry(f4, self._cut_w_var, 2, cb=lambda _: self._on_cut_opts()))
 
-        self._lbl(f4, "Comprimento traço:", 3)
+        _row("Comprimento traço:", 3, self._cut_line_widgets)
         self._cut_dash_var = tk.StringVar(value=str(self.cfg.cut_dash))
-        self._num_entry(f4, self._cut_dash_var, 3, cb=lambda _: self._on_cut_opts())
+        self._cut_line_widgets.append(
+            self._num_entry(f4, self._cut_dash_var, 3, cb=lambda _: self._on_cut_opts()))
 
-        self._lbl(f4, "Cor da linha:", 4)
+        _row("Cor da linha:", 4, self._cut_line_widgets)
         self._cut_col_btn = ctk.CTkButton(f4, text="       ", width=65,
                                           fg_color=self.cfg.cut_color,
                                           command=self._pick_cut_color)
         self._cut_col_btn.grid(row=4, column=1, sticky="w", padx=4, pady=2)
+        self._cut_line_widgets.append(self._cut_col_btn)
+
+        _row("Comprimento (mm):", 5, self._cut_mark_widgets)
+        self._mark_len_var = tk.StringVar(value=str(self.cfg.mark_length_mm))
+        self._cut_mark_widgets.append(
+            self._num_entry(f4, self._mark_len_var, 5, cb=lambda _: self._on_mark_opts()))
+
+        _row("Distância do corte (mm):", 6, self._cut_mark_widgets)
+        self._mark_off_var = tk.StringVar(value=str(self.cfg.mark_offset_mm))
+        self._cut_mark_widgets.append(
+            self._num_entry(f4, self._mark_off_var, 6, cb=lambda _: self._on_mark_opts()))
+
+        _row("Espessura (pt):", 7, self._cut_mark_widgets)
+        self._mark_w_var = tk.StringVar(value=str(self.cfg.mark_width_pt))
+        self._cut_mark_widgets.append(
+            self._num_entry(f4, self._mark_w_var, 7, cb=lambda _: self._on_mark_opts()))
+
+        self._lbl(f4, "Sangria (mm):", 8)
+        self._bleed_var = tk.StringVar(value=str(self.cfg.bleed_mm))
+        self._num_entry(f4, self._bleed_var, 8, cb=lambda _: self._on_bleed())
+
+        self._bleed_mode_lbl = ctk.CTkLabel(f4, text="Modo:", anchor="w",
+                                            font=ctk.CTkFont(size=11))
+        self._bleed_mode_lbl.grid(row=9, column=0, sticky="w", padx=4, pady=2)
+        self._bleed_mode_var = tk.StringVar(
+            value=BLEED_MODE_LABELS[BLEED_MODE_KEYS.index(self.cfg.bleed_mode)])
+        self._bleed_mode_menu = ctk.CTkOptionMenu(
+            f4, variable=self._bleed_mode_var, values=BLEED_MODE_LABELS,
+            command=lambda _: self._on_bleed(), width=190)
+        self._bleed_mode_menu.grid(row=9, column=1, sticky="w", padx=4)
+
+        # Avisos da geometria: âmbar (pede confirmação ao gerar) e cinza (só informa).
+        self._cut_warn_var = tk.StringVar(value="")
+        self._cut_warn_lbl = ctk.CTkLabel(f4, textvariable=self._cut_warn_var,
+                                          anchor="w", justify="left", wraplength=250,
+                                          font=ctk.CTkFont(size=10), text_color=WARN_COLOR)
+        self._cut_warn_lbl.grid(row=10, column=0, columnspan=2, sticky="w", padx=4)
+        self._cut_info_var = tk.StringVar(value="")
+        self._cut_info_lbl = ctk.CTkLabel(f4, textvariable=self._cut_info_var,
+                                          anchor="w", justify="left", wraplength=250,
+                                          font=ctk.CTkFont(size=10),
+                                          text_color=("gray50", "gray60"))
+        self._cut_info_lbl.grid(row=11, column=0, columnspan=2, sticky="w", padx=4)
+        self._sync_cut_controls()
 
         # ── SAÍDA ──
         f5 = self._acc_section("saida", "Saída")
@@ -2219,7 +2577,45 @@ class ConfigPanel(ctk.CTkFrame):
             self.on_change()
 
     def _on_cuts(self):
-        self.cfg.cut_lines = self._cuts_var.get()
+        self.cfg.cut_guide = CUT_GUIDE_KEYS[CUT_GUIDE_LABELS.index(self._guide_var.get())]
+        self._sync_cut_controls()
+        self.on_change()
+
+    def _sync_cut_controls(self):
+        """Mostra só os controles que valem para a guia e a sangria atuais."""
+        for group, shown in ((self._cut_line_widgets, self.cfg.cut_guide == "lines"),
+                             (self._cut_mark_widgets, self.cfg.cut_guide == "marks")):
+            for widget in group:
+                widget.grid() if shown else widget.grid_remove()
+        for widget in (self._bleed_mode_lbl, self._bleed_mode_menu):
+            widget.grid() if self.cfg.bleed_mm > 0 else widget.grid_remove()
+        self._refresh_cut_notes()
+
+    def _refresh_cut_notes(self):
+        """Escreve os avisos da geometria (âmbar e cinza) sob os campos."""
+        warnings = sheet_geometry(self.cfg).warnings
+        self._cut_warn_var.set("\n".join(t for lvl, t in warnings if lvl == "warn"))
+        self._cut_info_var.set("\n".join(t for lvl, t in warnings if lvl == "info"))
+
+    def _on_mark_opts(self):
+        """Comprimento, distância e espessura das marcas: fora de faixa vai ao limite."""
+        for var, attr, rng in ((self._mark_len_var, "mark_length_mm", MARK_LEN_RANGE),
+                               (self._mark_off_var, "mark_offset_mm", MARK_OFFSET_RANGE),
+                               (self._mark_w_var, "mark_width_pt", MARK_WIDTH_RANGE)):
+            setattr(self.cfg, attr, clamp_float(var.get().replace(",", "."), *rng,
+                                                getattr(self.cfg, attr)))
+            var.set(str(getattr(self.cfg, attr)))
+        self._sync_cut_controls()
+        self.on_change()
+
+    def _on_bleed(self):
+        """Sangria (0–10 mm) e modo; o modo só aparece com sangria > 0."""
+        self.cfg.bleed_mm = clamp_float(self._bleed_var.get().replace(",", "."),
+                                        *BLEED_RANGE, self.cfg.bleed_mm)
+        self._bleed_var.set(str(self.cfg.bleed_mm))
+        self.cfg.bleed_mode = BLEED_MODE_KEYS[
+            BLEED_MODE_LABELS.index(self._bleed_mode_var.get())]
+        self._sync_cut_controls()
         self.on_change()
 
     def _on_cut_opts(self):
@@ -2356,10 +2752,16 @@ class ConfigPanel(ctk.CTkFrame):
         self._mo_var.set(str(c.margin_outer_mm)); self._mbx_var.set(str(c.margin_between_x_mm))
         self._mby_var.set(str(c.margin_between_y_mm))
         self._bg_btn.configure(fg_color=c.bg_color)
-        self._cuts_var.set(c.cut_lines)
+        self._guide_var.set(CUT_GUIDE_LABELS[CUT_GUIDE_KEYS.index(c.cut_guide)])
         self._cut_style_var.set(c.cut_style)
         self._cut_w_var.set(str(c.cut_width_px)); self._cut_dash_var.set(str(c.cut_dash))
         self._cut_col_btn.configure(fg_color=c.cut_color)
+        self._mark_len_var.set(str(c.mark_length_mm))
+        self._mark_off_var.set(str(c.mark_offset_mm))
+        self._mark_w_var.set(str(c.mark_width_pt))
+        self._bleed_var.set(str(c.bleed_mm))
+        self._bleed_mode_var.set(BLEED_MODE_LABELS[BLEED_MODE_KEYS.index(c.bleed_mode)])
+        self._sync_cut_controls()
         self._fmt_var.set(c.output_format)
         self._comp_var.set(PDF_COMP_LABELS[PDF_COMP_KEYS.index(c.pdf_compression)])
         self._q_var.set(str(c.jpeg_quality))
@@ -2371,6 +2773,7 @@ class ConfigPanel(ctk.CTkFrame):
 
     def update_info(self, n_images: int, n_pages: int, engine: "ImpositionEngine"):
         """Atualiza contadores, tamanho de célula e a guarda de qualidade."""
+        self._refresh_cut_notes()      # margem/espaçamento mudaram → avisos de corte também
         self._sheet_info_var.set(
             f"{n_images} imagem(ns) · {self.cfg.nup()} por folha · {n_pages} folha(s)")
 
@@ -2938,6 +3341,12 @@ class PrintImposerApp(ctk.CTk):
                     f"A impressão vai sair ampliada e menos nítida.\n\n"
                     f"Ideal: reexportar com pelo menos {cw}×{ch} px.\n\nGerar mesmo assim?"):
                 return
+
+        # Marcas que não cabem na margem / sangria que não cabe no vão: não sai
+        # cortado pela metade em silêncio (mesmo espírito da guarda de qualidade).
+        cut_msg = cut_confirm_text(cfg)
+        if cut_msg and not messagebox.askyesno("Corte e sangria", cut_msg):
+            return
 
         self._generating = True
         self._gen_btn.configure(state="disabled", text="Gerando…")

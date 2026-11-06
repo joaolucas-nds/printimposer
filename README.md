@@ -1,4 +1,4 @@
-# 🖨 PrintImposer v1.5
+# 🖨 PrintImposer v1.6
 
 **Imposição de páginas para impressão em massa** — junte dezenas de imagens em folhas prontas para imprimir e cortar.
 
@@ -61,14 +61,14 @@ Use **`Opções › Criar atalho…`**. O diálogo explica o que o atalho faz e 
 ## 🖥 A janela
 
 ```
-┌ PrintImposer   Arquivo  Opções  Ajuda   v1.5.0 · SVG: … · PDF: … ┐
+┌ PrintImposer   Arquivo  Opções  Ajuda   v1.6.0 · SVG: … · PDF: … ┐
 ├────────────┬──────────────────────────────┬────────────────────────┤
 │ Imagens    │ Grade (colunas × linhas)  ◼◼ │ Preview         ◀  ▶   │
 │            │ ┌ seções recolhíveis ──────┐ │                        │
 │ + Arquivos │ │ ▸ Papel e resolução      │ │                        │
 │ + Pasta    │ │ ▸ Ajuste da imagem       │ │                        │
 │            │ │ ▸ Margens e espaçamento  │ │                        │
-│            │ │ ▸ Linhas de corte        │ │                        │
+│            │ │ ▸ Corte e sangria        │ │                        │
 │            │ │ ▾ Saída                  │ │                        │
 │            │ └──────────────────────────┘ │                        │
 │            │ 12 img · 4 por folha · 3 fl. │                        │
@@ -116,7 +116,7 @@ Qualquer outra combinação até 12 × 12 funciona sem cadastro.
 | **Papel e resolução** | A3, A4, A5, A6, Letter, Legal, Tabloid ou Custom (largura/altura em mm). DPI de 72 a 1200 — **300** é o padrão de impressão. |
 | **Ajuste da imagem** | *Ajustar (fit)* — imagem inteira, pode sobrar borda na cor de fundo · *Preencher (fill)* — preenche e recorta o excesso · *Esticar (stretch)* — força o tamanho, pode distorcer. **Auto-Rotate** gira a imagem quando a orientação dela não bate com a da célula. |
 | **Margens e espaçamento** | Margem externa; espaço **entre colunas** e **entre linhas**, separados, em mm; cor de fundo das áreas vazias. |
-| **Linhas de corte** | Sólida, tracejada ou pontilhada; espessura em px, tamanho do traço e cor. As linhas atravessam a folha entre as colunas e linhas. |
+| **Corte e sangria** | **Guia de corte:** nenhuma, linhas atravessando a folha (sólida, tracejada ou pontilhada) ou **marcas de canto** — traços curtos na margem externa, um em cada ponta de cada linha de corte, no padrão de gráfica (4 mm, a 3 mm do corte, 0,25 pt, preto). **Sangria** em mm (3 mm é o padrão de mercado): «estender a borda» espelha a borda da arte; «a arte já tem sangria» usa a borda que você exportou. |
 | **Saída** | Formato, **compressão/qualidade** (quando o formato tem), prefixo, sufixo, pasta de saída e, se quiser, **uma cópia em outro destino** — enquanto ela estiver ligada, a barra inferior avisa «Também grava em: …». |
 
 ### Guarda de qualidade (rodapé)
@@ -169,13 +169,14 @@ O campo «Qualidade» é um só: vale para o JPEG e para o PDF em modo JPEG.
 1. **Na sua ferramenta** (Figma, Canva, Affinity, Photoshop, Corel, um gerador web…)
    - Crie os cards no tamanho A6 (105 × 148 mm).
    - Exporte **PDF** (melhor: o texto e os traços saem vetoriais — precisa do `pypdfium2`) ou **PNG com pelo menos 1240 × 1748 px** — confira o tamanho em pixels, não só a escala do export.
-   - Quer guia de corte desenhado na arte? Uma borda fina na prancheta funciona; aí deixe as linhas de corte do app desligadas.
+   - Fundo colorido até a borda? Exporte com **3 mm de sangria** (A6 vira 111 × 154 mm) e use «A arte já tem sangria»; ou exporte no tamanho exato e use «Estender a borda».
    - **Fotos do celular** entram direto (JPEG, AVIF, e HEIC com o extra).
 2. **No PrintImposer**
    - **+ Pasta** → a pasta com as artes.
    - Grade **2 × 2** (atalho «4 por folha»), papel **A4**, **300 DPI**.
    - Ajuste **Ajustar (fit)** com **Auto-Rotate** ligado.
-   - Margem externa **0** (ou **5 mm** se a impressora não imprime até a borda) e **0** entre colunas e entre linhas.
+   - Margem externa **10 mm** (cabem as marcas de canto) e **0** entre colunas e entre linhas — ou **6 mm** entre elas, se usar sangria.
+   - Em «Corte e sangria»: **Marcas de canto** e, se a arte tiver fundo até a borda, **Sangria 3 mm**.
    - Confira o selo verde no rodapé e clique em **Gerar Arquivos**.
 3. **Na impressora**
    - Escolha **«Tamanho real» / 100 %**. Nunca «ajustar à página»: isso reescala a folha e o corte deixa de bater.
@@ -229,4 +230,4 @@ O motor de composição (`ImpositionEngine`) não depende da interface: testes e
 
 ---
 
-*PrintImposer v1.5.0 — uso pessoal/profissional de impressão em massa.*
+*PrintImposer v1.6.0 — uso pessoal/profissional de impressão em massa.*

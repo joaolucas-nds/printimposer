@@ -48,12 +48,6 @@ Hoje o `draft()` só acelera a miniatura. Na composição, quando a célula é b
 ### 2026-07-19 — Aviso de grade absurda
 O teto de 12×12 impede o extremo, mas 10×10 num A4 dá células de ~20 mm: tecnicamente válido, quase sempre inútil. Um aviso explícito de "célula muito pequena para impressão" seria mais direto que esperar o selo de qualidade.
 
-### 2026-06-15 — Marcas de corte de canto (padrão de indústria)
-Ticks curtos nos cantos de cada slot, dentro do gutter, em vez de linhas atravessando a folha. Mais profissional e quase sem peso no arquivo. **Entra na 1.6.0 (F4, etapa 4)** — nas bordas externas da grade, padrão de impressão em lote; marcas em cantos internos ficam de fora (`meta/specs/261106-SPEC-F4-etapa4.md`).
-
-### 2026-06-15 — Sangria (bleed) configurável
-Campo em mm: a arte transborda o limite de corte para evitar borda branca depois do corte. **Entra na 1.6.0 (F4, etapa 4)**, junto das marcas — modos «espelhar a borda» e «a arte já tem sangria».
-
 ### 2026-06-15 — Entrada vetorial → imposição vetorial *(grande)*
 Posicionar PDFs vetorialmente (pypdf/reportlab) em vez de rasterizar: qualidade perfeita, arquivos minúsculos, marcas sem peso. Mudança de arquitetura. **Portão da F4 decidido em 06/11: vai para a F5 (DEC-015).** Medido: nitidez do texto melhora de forma visível na tela; o arquivo não fica menor para o conteúdo do dono (bitmap embutido). **Volta antes** se uma impressão em gráfica de ponta mostrar o texto raster mole.
 
@@ -113,6 +107,8 @@ Executável Windows para quem não tem Python. **F5.**
 
 ## ✅ Concluídas
 > Ideia que virou realidade. Mantida aqui para histórico (com referência à versão/decisão).
+- **Marcas de corte de canto** *(assistente, 2026-06-15)* — implementadas na 1.6.0 (F4, etapa 4), na margem externa, uma por ponta de cada linha de corte; padrão 4 mm, a 3 mm, 0,25 pt. Cantos internos ficaram de fora.
+- **Sangria configurável** *(assistente, 2026-06-15)* — implementada na 1.6.0 (F4, etapa 4): espelhar a borda ou usar a sangria da arte; limitada ao espaço entre as células.
 - **Saída WebP e AVIF** *(usuário, 2026-11-04)* — implementada na 1.5.0, para compartilhar (WebP sem perda ou com perda; AVIF com qualidade).
 - **Guarda de qualidade olhando as imagens dentro do PDF** *(assistente, 2026-11-04)* — implementada na 1.5.0: imagens que cobrem ≥ 10% da página entram no selo com a resolução efetiva na célula.
 - **Erro de abertura visível mesmo via `.bat`** *(assistente, 2026-07-19)* — implementado na 1.4.1: janela de erro + `~/.printimposer/last_error.log`.

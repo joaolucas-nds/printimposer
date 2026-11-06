@@ -172,7 +172,7 @@ class ComposeTests(unittest.TestCase):
 
     def test_estilos_de_corte_nao_quebram(self):
         p = make_image(self.tmp / "z.png", 300, 400)
-        self.cfg.cut_lines = True
+        self.cfg.cut_guide = "lines"
         for style in pi.LINE_STYLES:
             with self.subTest(style=style):
                 self.cfg.cut_style = style
@@ -461,7 +461,7 @@ class SpacingTests(unittest.TestCase):
         self.cfg.dpi = 100
         self.cfg.margin_between_x_mm = 10.0
         self.cfg.margin_between_y_mm = 0.0
-        self.cfg.cut_lines = True
+        self.cfg.cut_guide = "lines"
         self.cfg.cut_color = "#FF0000"
         self.cfg.cut_width_px = 1
         img = make_image(tmp / "a.png", 200, 280, (0, 0, 255))
@@ -1040,7 +1040,7 @@ class MenuAndDialogTests(unittest.TestCase):
         self.assertLessEqual(pi.ConfigPanel.BOTTOM_H, 84)
 
     def test_versao(self):
-        self.assertEqual(pi.VERSION, "1.5.0")
+        self.assertEqual(pi.VERSION, "1.6.0")
 
 
 class StartupErrorTests(unittest.TestCase):
@@ -1492,6 +1492,490 @@ class WebpAvifOutputTests(unittest.TestCase):
             cfg = pi.LayoutConfig()
             cfg.from_dict({"output_format": "AVIF"})
             self.assertEqual(cfg.output_format, "PNG")
+
+
+def cut_cfg(**kw):
+    """Config de teste: A4, 2×2, margem 10 mm, espaçamento 0 — o caso de referência do corte."""
+    cfg = pi.LayoutConfig()
+    cfg.cols = cfg.rows = 2
+    cfg.margin_outer_mm = 10.0
+    cfg.auto_rotate = False
+    for k, v in kw.items():
+        setattr(cfg, k, v)
+    return cfg
+
+
+def _overlap(a, b):
+    """Interseção de área positiva entre dois retângulos (x0, y0, x1, y1)."""
+    return a[0] < b[2] and a[2] > b[0] and a[1] < b[3] and a[3] > b[1]
+
+
+class SheetGeometryTests(unittest.TestCase):
+    """F4 etapa 4: geometria de corte, sangria e marcas, em mm, sem Tk nem Pillow."""
+
+    def test_marcas_com_celulas_coladas(self):
+        geo = pi.sheet_geometry(cut_cfg(cut_guide="marks"))
+        self.assertEqual(len(geo.cut_x), 3)
+        self.assertEqual(len(geo.cut_y), 3)
+        self.assertEqual(len(geo.marks), 2 * (3 + 3))
+        self.assertEqual([round(v, 3) for v in geo.cut_x], [10.0, 105.0, 200.0])
+
+    def test_marcas_com_espacamento(self):
+        geo = pi.sheet_geometry(cut_cfg(cut_guide="marks", margin_between_x_mm=6.0,
+                                        margin_between_y_mm=6.0))
+        self.assertEqual((len(geo.cut_x), len(geo.cut_y)), (4, 4))
+        self.assertEqual(len(geo.marks), 16)
+
+    def test_sem_marcas_fora_da_guia_marcas(self):
+        for guide in ("none", "lines"):
+            self.assertEqual(pi.sheet_geometry(cut_cfg(cut_guide=guide)).marks, [])
+
+    def test_marca_comeca_na_distancia_e_tem_o_comprimento(self):
+        geo = pi.sheet_geometry(cut_cfg(cut_guide="marks"))
+        gx0, gy0, gx1, gy1 = geo.grid
+        top = [m for m in geo.marks if m[0] == m[2] and m[3] <= gy0]
+        self.assertEqual(len(top), 3)
+        for x1, y1, x2, y2 in top:
+            self.assertAlmostEqual(gy0 - y2, 3.0)         # distância padrão
+            self.assertAlmostEqual(y2 - y1, 4.0)          # comprimento padrão
+
+    def test_distancia_efetiva_nunca_menor_que_a_sangria(self):
+        geo = pi.sheet_geometry(cut_cfg(cut_guide="marks", bleed_mm=5.0,
+                                        mark_offset_mm=3.0, margin_outer_mm=15.0))
+        self.assertEqual(geo.mark_offset, 5.0)
+        gy0 = geo.grid[1]
+        top = [m for m in geo.marks if m[0] == m[2] and m[3] <= gy0]
+        self.assertAlmostEqual(gy0 - top[0][3], 5.0)
+
+    def test_margem_curta_avisa_com_o_minimo(self):
+        geo = pi.sheet_geometry(cut_cfg(cut_guide="marks", margin_outer_mm=5.0))
+        self.assertIn(("warn", "A margem externa precisa de pelo menos 7 mm "
+                               "para as marcas."), geo.warnings)
+
+    def test_margem_suficiente_nao_avisa(self):
+        self.assertEqual(pi.sheet_geometry(cut_cfg(cut_guide="marks")).warnings, [])
+
+    def test_margem_curta_so_avisa_com_marcas(self):
+        self.assertEqual(
+            pi.sheet_geometry(cut_cfg(cut_guide="none", margin_outer_mm=0.0)).warnings, [])
+
+    def test_sangria_maior_que_o_vao_avisa_o_que_coube(self):
+        geo = pi.sheet_geometry(cut_cfg(bleed_mm=3.0, margin_between_x_mm=4.0,
+                                        margin_between_y_mm=4.0))
+        self.assertIn(("warn", "Espaçamento entre colunas menor que 2× a sangria: "
+                               "entre as colunas coube 2 mm."), geo.warnings)
+        self.assertIn(("warn", "Espaçamento entre linhas menor que 2× a sangria: "
+                               "entre as linhas coube 2 mm."), geo.warnings)
+
+    def test_sangria_com_celulas_coladas_so_cabe_na_borda_externa(self):
+        geo = pi.sheet_geometry(cut_cfg(bleed_mm=3.0))
+        self.assertEqual(geo.bleed_sides[0], (3.0, 3.0, 0.0, 0.0))     # canto sup. esq.
+        self.assertEqual(geo.bleed_sides[3], (0.0, 0.0, 3.0, 3.0))     # canto inf. dir.
+        self.assertTrue(any(lvl == "warn" for lvl, _ in geo.warnings))
+
+    def test_sangria_com_espaco_de_sobra_vai_inteira(self):
+        geo = pi.sheet_geometry(cut_cfg(bleed_mm=3.0, margin_between_x_mm=6.0,
+                                        margin_between_y_mm=6.0))
+        for sides in geo.bleed_sides:
+            self.assertEqual(sides, (3.0, 3.0, 3.0, 3.0))
+        self.assertEqual(geo.warnings, [])
+
+    def test_sangria_limitada_pela_margem_externa(self):
+        geo = pi.sheet_geometry(cut_cfg(bleed_mm=3.0, margin_outer_mm=1.0,
+                                        margin_between_x_mm=6.0, margin_between_y_mm=6.0))
+        self.assertEqual(geo.bleed_sides[0][:2], (1.0, 1.0))
+
+    def test_sem_sangria_o_retangulo_de_sangria_e_o_de_corte(self):
+        geo = pi.sheet_geometry(cut_cfg())
+        self.assertEqual(geo.bleeds, geo.cells)
+
+    def test_linhas_com_sangria_avisa_em_cinza(self):
+        geo = pi.sheet_geometry(cut_cfg(cut_guide="lines", bleed_mm=3.0,
+                                        margin_between_x_mm=6.0, margin_between_y_mm=6.0))
+        self.assertEqual(geo.warnings, [("info", "Com sangria, use marcas de canto: "
+                                                 "as linhas riscam a sangria.")])
+
+    def test_marca_nunca_intersecta_corte_nem_sangria(self):
+        casos = [dict(), dict(margin_between_x_mm=6.0, margin_between_y_mm=6.0),
+                 dict(bleed_mm=3.0), dict(bleed_mm=5.0, margin_between_x_mm=12.0,
+                                          margin_between_y_mm=12.0),
+                 dict(bleed_mm=3.0, mark_offset_mm=0.0, margin_outer_mm=12.0),
+                 dict(cols=3, rows=4, bleed_mm=2.0, margin_between_x_mm=5.0)]
+        eps = 1e-9
+        for kw in casos:
+            with self.subTest(**kw):
+                geo = pi.sheet_geometry(cut_cfg(cut_guide="marks", **kw))
+                self.assertTrue(geo.marks)
+                for x1, y1, x2, y2 in geo.marks:
+                    # Espessura mínima só no eixo curto: tocar a borda (distância ==
+                    # sangria) não é invadir.
+                    ex, ey = (eps, 0) if x1 == x2 else (0, eps)
+                    caixa = (min(x1, x2) - ex, min(y1, y2) - ey,
+                             max(x1, x2) + ex, max(y1, y2) + ey)
+                    for rect in geo.cells + geo.bleeds:
+                        self.assertFalse(_overlap(caixa, rect), (caixa, rect))
+
+    def test_nenhuma_celula_com_valor_negativo(self):
+        geo = pi.sheet_geometry(cut_cfg(margin_outer_mm=200.0))
+        for x0, y0, x1, y1 in geo.cells:
+            self.assertGreaterEqual(x1, x0)
+            self.assertGreaterEqual(y1, y0)
+
+    def test_funcao_pura_nao_muta_a_config(self):
+        cfg = cut_cfg(cut_guide="marks", bleed_mm=3.0)
+        antes = dict(cfg.to_dict())
+        pi.sheet_geometry(cfg)
+        self.assertEqual(cfg.to_dict(), antes)
+
+
+class CutCompatTests(unittest.TestCase):
+    """cut_lines (1.5) → cut_guide (1.6), faixas dos campos novos e presets."""
+
+    def test_cut_lines_true_vira_linhas(self):
+        cfg = pi.LayoutConfig()
+        cfg.from_dict({"cut_lines": True})
+        self.assertEqual(cfg.cut_guide, "lines")
+
+    def test_cut_lines_false_vira_nenhuma(self):
+        cfg = pi.LayoutConfig()
+        cfg.from_dict({"cut_lines": False})
+        self.assertEqual(cfg.cut_guide, "none")
+
+    def test_campo_novo_manda_sobre_o_antigo(self):
+        cfg = pi.LayoutConfig()
+        cfg.from_dict({"cut_lines": True, "cut_guide": "marks"})
+        self.assertEqual(cfg.cut_guide, "marks")
+
+    def test_nao_muta_o_dict_do_chamador(self):
+        preset = {"cut_lines": True, "cols": 3}
+        pi.LayoutConfig().from_dict(preset)
+        self.assertIn("cut_lines", preset)
+
+    def test_cut_lines_nao_existe_mais_no_modelo(self):
+        cfg = pi.LayoutConfig()
+        self.assertFalse(hasattr(cfg, "cut_lines"))
+        self.assertNotIn("cut_lines", cfg.to_dict())
+        self.assertNotIn("cut_lines", pi.LayoutConfig.PRESET_FIELDS)
+
+    def test_preset_antigo_de_arquivo_abre_com_linhas(self):
+        """Um presets.json da 1.5 (com cut_lines) não perde o corte ligado em silêncio."""
+        import json
+        antigo = json.loads('{"Cards": {"cols": 2, "rows": 2, "cut_lines": true, '
+                            '"cut_color": "#112233", "cut_style": "Tracejada"}}')
+        cfg = pi.LayoutConfig()
+        cfg.from_dict(antigo["Cards"])
+        self.assertEqual((cfg.cut_guide, cfg.cut_color, cfg.cut_style),
+                         ("lines", "#112233", "Tracejada"))
+
+    def test_padroes_do_mercado(self):
+        cfg = pi.LayoutConfig()
+        self.assertEqual((cfg.cut_guide, cfg.mark_length_mm, cfg.mark_offset_mm,
+                          cfg.mark_width_pt, cfg.bleed_mm, cfg.bleed_mode),
+                         ("none", 4.0, 3.0, 0.25, 0.0, "mirror"))
+
+    def test_preset_ida_e_volta_com_os_campos_novos(self):
+        a = pi.LayoutConfig()
+        a.from_dict({"cut_guide": "marks", "mark_length_mm": 5.0, "mark_offset_mm": 2.5,
+                     "mark_width_pt": 0.5, "bleed_mm": 3.0, "bleed_mode": "included"})
+        d = a.preset_dict()
+        for k in ("cut_guide", "mark_length_mm", "mark_offset_mm", "mark_width_pt",
+                  "bleed_mm", "bleed_mode"):
+            self.assertIn(k, d)
+        b = pi.LayoutConfig()
+        b.from_dict(d)
+        self.assertEqual(b.preset_dict(), d)
+
+    def test_valores_fora_de_faixa_sao_ajustados(self):
+        cfg = pi.LayoutConfig()
+        cfg.from_dict({"mark_length_mm": 99, "mark_offset_mm": 40, "mark_width_pt": 0,
+                       "bleed_mm": -3})
+        self.assertEqual((cfg.mark_length_mm, cfg.mark_offset_mm,
+                          cfg.mark_width_pt, cfg.bleed_mm), (15.0, 15.0, 0.1, 0.0))
+        cfg.from_dict({"mark_length_mm": 0.2, "bleed_mm": 50})
+        self.assertEqual((cfg.mark_length_mm, cfg.bleed_mm), (1.0, 10.0))
+
+    def test_valor_ilegivel_cai_no_padrao_e_enum_invalido_tambem(self):
+        cfg = pi.LayoutConfig()
+        cfg.from_dict({"mark_length_mm": "abc", "bleed_mm": None,
+                       "cut_guide": "zig", "bleed_mode": "zag"})
+        self.assertEqual((cfg.mark_length_mm, cfg.bleed_mm, cfg.cut_guide, cfg.bleed_mode),
+                         (4.0, 0.0, "none", "mirror"))
+
+    def test_geracao_congelada_leva_os_campos_novos(self):
+        cfg = pi.LayoutConfig()
+        cfg.from_dict({"cut_guide": "marks", "bleed_mm": 2.0, "bleed_mode": "included"})
+        _, frozen = pi.snapshot_for_generation([], cfg)
+        self.assertEqual((frozen.cut_guide, frozen.bleed_mm, frozen.bleed_mode),
+                         ("marks", 2.0, "included"))
+
+    def test_confirmacao_so_com_aviso_ambar(self):
+        self.assertIsNone(pi.cut_confirm_text(cut_cfg(cut_guide="marks")))
+        self.assertIsNone(pi.cut_confirm_text(cut_cfg(cut_guide="lines", bleed_mm=3.0,
+                                                      margin_between_x_mm=6.0,
+                                                      margin_between_y_mm=6.0)))
+        txt = pi.cut_confirm_text(cut_cfg(cut_guide="marks", margin_outer_mm=0.0))
+        self.assertIn("A margem externa precisa de pelo menos 7 mm", txt)
+        self.assertTrue(txt.endswith("Gerar mesmo assim?"))
+
+    def test_rotulos_e_secao_no_codigo(self):
+        src = (Path(__file__).resolve().parent.parent / "print_imposer.py"
+               ).read_text(encoding="utf-8")
+        self.assertIn('_acc_section("corte", "Corte e sangria")', src)
+        self.assertEqual(pi.CUT_GUIDE_LABELS,
+                         ["Nenhuma", "Linhas atravessando", "Marcas de canto"])
+        self.assertEqual(pi.BLEED_MODE_LABELS,
+                         ["Estender a borda (espelhar)", "A arte já tem sangria"])
+        for rotulo in ("Guia de corte:", "Comprimento (mm):", "Distância do corte (mm):",
+                       "Espessura (pt):", "Sangria (mm):"):
+            self.assertIn(rotulo, src)
+        self.assertIn("corte", pi.SECTION_DEFAULTS)
+
+
+class CutRasterTests(unittest.TestCase):
+    """Desenho raster das marcas e da sangria (mesmo compose_page do preview)."""
+
+    DPI = 150
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def _engine(self, n=4, color=(0, 0, 255), **kw):
+        cfg = cut_cfg(dpi=self.DPI, **kw)
+        eng = pi.ImpositionEngine([], cfg)
+        cw, ch = eng.cell_px()
+        img = make_image(self.tmp / "fonte.png", cw, ch, color)
+        return eng, [img] * n
+
+    def _px(self, mm):
+        return int(mm * self.DPI / 25.4 + 0.5)
+
+    @staticmethod
+    def _componentes_pretos(page):
+        """Conta componentes conexos (4-vizinhança) de pixels pretos puros."""
+        w, h = page.size
+        pix = page.load()
+        pretos = {(x, y) for y in range(h) for x in range(w) if pix[x, y] == (0, 0, 0)}
+        n = 0
+        while pretos:
+            n += 1
+            pilha = [pretos.pop()]
+            while pilha:
+                x, y = pilha.pop()
+                for p in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+                    if p in pretos:
+                        pretos.discard(p)
+                        pilha.append(p)
+        return n
+
+    def test_marcas_celulas_coladas_sao_12_componentes(self):
+        eng, imgs = self._engine(cut_guide="marks")
+        self.assertEqual(self._componentes_pretos(eng.compose_page(0, imgs)), 12)
+
+    def test_marcas_com_espacamento_sao_16_componentes(self):
+        eng, imgs = self._engine(cut_guide="marks", margin_between_x_mm=6.0,
+                                 margin_between_y_mm=6.0)
+        self.assertEqual(self._componentes_pretos(eng.compose_page(0, imgs)), 16)
+
+    def test_marca_na_margem_e_nenhuma_dentro_do_corte_e_da_sangria(self):
+        eng, imgs = self._engine(cut_guide="marks", margin_between_x_mm=6.0,
+                                 margin_between_y_mm=6.0, bleed_mm=3.0)
+        page = eng.compose_page(0, imgs)
+        geo = pi.sheet_geometry(eng.cfg)
+        # Uma marca vertical acima da grade: pixel preto no meio dela.
+        x1, y1, x2, y2 = next(m for m in geo.marks if m[0] == m[2] and m[3] <= geo.grid[1])
+        self.assertEqual(page.getpixel((self._px(x1), self._px((y1 + y2) / 2))), (0, 0, 0))
+        # Nada de preto dentro de nenhum retângulo de sangria (que contém o de corte).
+        for x0, y0, xe, ye in geo.bleeds:
+            reg = page.crop((self._px(x0), self._px(y0), self._px(xe), self._px(ye)))
+            self.assertNotIn((0, 0, 0), set(reg.getdata()))
+        self.assertEqual(self._componentes_pretos(page), 16)
+
+    def test_espessura_em_pt_vira_px_com_minimo_de_1(self):
+        eng, imgs = self._engine(cut_guide="marks", mark_width_pt=0.25)
+        page = eng.compose_page(0, imgs)
+        m = pi.sheet_geometry(eng.cfg).marks[0]
+        x, y = self._px(m[0]), self._px((m[1] + m[3]) / 2)
+        self.assertEqual(page.getpixel((x, y)), (0, 0, 0))
+        self.assertNotEqual(page.getpixel((x + 3, y)), (0, 0, 0))   # 0,25 pt a 150 dpi = 1 px
+        eng.cfg.mark_width_pt = 2.0                                  # 2 pt a 150 dpi ≈ 4 px
+        page = eng.compose_page(0, imgs)
+        self.assertEqual(page.getpixel((x + 1, y)), (0, 0, 0))
+
+    def test_sem_marcas_nao_ha_preto(self):
+        eng, imgs = self._engine(cut_guide="none")
+        self.assertEqual(self._componentes_pretos(eng.compose_page(0, imgs)), 0)
+
+    def test_preview_a_72_dpi_tambem_desenha_as_marcas(self):
+        eng, imgs = self._engine(cut_guide="marks")
+        page = eng.compose_page(0, imgs, override_dpi=72)
+        self.assertEqual(self._componentes_pretos(page), 12)
+
+    def test_linhas_atravessando_continuam_desenhando(self):
+        eng, imgs = self._engine(cut_guide="lines", margin_between_x_mm=10.0)
+        eng.cfg.cut_color = "#FF0000"
+        page = eng.compose_page(0, imgs)
+        achou = any(page.getpixel((x, 5)) == (255, 0, 0) for x in range(page.width))
+        self.assertTrue(achou)
+
+    # ── sangria espelhada ───────────────────────────────────────────────────
+
+    def _fonte_marcada(self, eng, name="marcada.png"):
+        """Fonte do tamanho exato da célula: coluna 0 amarela, linha 0 vermelha."""
+        cw, ch = eng.cell_px()
+        img = Image.new("RGB", (cw, ch), (0, 0, 255))
+        img.paste((255, 255, 0), (0, 0, 1, ch))
+        img.paste((255, 0, 0), (0, 0, cw, 1))
+        path = self.tmp / name
+        img.save(path)
+        return str(path)
+
+    def test_sangria_espelhada_reflete_a_borda_da_celula(self):
+        eng = pi.ImpositionEngine([], cut_cfg(dpi=self.DPI, fit_mode="stretch",
+                                              bleed_mm=3.0, margin_between_x_mm=6.0,
+                                              margin_between_y_mm=6.0))
+        fonte = self._fonte_marcada(eng)
+        page = eng.compose_page(0, [fonte] * 4)
+        x, y = self._px(10.0), self._px(10.0)
+        b = eng.bleed_px()
+        self.assertGreater(b, 3)
+        # Esquerda: a 1ª coluna da faixa é a 1ª coluna da célula (amarela); a 2ª, a 2ª (azul).
+        self.assertEqual(page.getpixel((x - 1, y + 40)), (255, 255, 0))
+        self.assertEqual(page.getpixel((x - 2, y + 40)), (0, 0, 255))
+        # Topo: espelha a linha 0 (vermelha).
+        self.assertEqual(page.getpixel((x + 40, y - 1)), (255, 0, 0))
+        # Canto: espelhado nos dois eixos = o pixel (0,0) da célula (vermelho, desenhado por último).
+        self.assertEqual(page.getpixel((x - 1, y - 1)), (255, 0, 0))
+        # A faixa tem a largura da sangria: um pixel além dela é fundo.
+        self.assertEqual(page.getpixel((x - b - 1, y + 40)), (255, 255, 255))
+
+    def test_sangria_espelhada_nao_invade_a_celula_vizinha(self):
+        eng = pi.ImpositionEngine([], cut_cfg(dpi=self.DPI, fit_mode="stretch",
+                                              bleed_mm=3.0, margin_between_x_mm=2.0,
+                                              margin_between_y_mm=2.0))
+        fonte = self._fonte_marcada(eng)
+        page = eng.compose_page(0, [fonte] * 4)
+        cw, ch = eng.cell_px()
+        x0, y0 = self._px(10.0), self._px(10.0)
+        # Última coluna e última linha da célula 0 seguem azuis: a sangria da vizinha
+        # (limitada a metade do vão) não passou por cima.
+        self.assertEqual(page.getpixel((x0 + cw - 1, y0 + 40)), (0, 0, 255))
+        self.assertEqual(page.getpixel((x0 + 40, y0 + ch - 1)), (0, 0, 255))
+
+    def test_sem_sangria_o_modo_e_irrelevante(self):
+        eng, imgs = self._engine(cut_guide="none")
+        a = eng.compose_page(0, imgs)
+        eng.cfg.bleed_mm = 0.0
+        eng.cfg.bleed_mode = "included"
+        self.assertEqual(list(a.getdata()), list(eng.compose_page(0, imgs).getdata()))
+
+    # ── sangria «a arte já tem» ─────────────────────────────────────────────
+
+    def test_arte_com_sangria_cai_no_corte(self):
+        eng = pi.ImpositionEngine([], cut_cfg(dpi=self.DPI, fit_mode="stretch",
+                                              bleed_mm=3.0, bleed_mode="included",
+                                              margin_between_x_mm=6.0,
+                                              margin_between_y_mm=6.0))
+        cw, ch = eng.cell_px()
+        b = eng.bleed_px()
+        # Fonte do tamanho da célula aumentada: borda extra amarela, 1º pixel de dentro verde.
+        img = Image.new("RGB", (cw + 2 * b, ch + 2 * b), (0, 0, 255))
+        img.paste((255, 255, 0), (0, 0, b, ch + 2 * b))
+        img.paste((0, 200, 0), (b, 0, b + 1, ch + 2 * b))
+        path = self.tmp / "com_sangria.png"
+        img.save(path)
+        page = eng.compose_page(0, [str(path)] * 4)
+        x, y = self._px(10.0), self._px(10.0)
+        self.assertEqual(page.getpixel((x, y + 40)), (0, 200, 0))        # corte = borda de dentro
+        self.assertEqual(page.getpixel((x - 1, y + 40)), (255, 255, 0))  # sangria da própria arte
+
+    def test_guarda_de_qualidade_mede_contra_a_celula_aumentada(self):
+        a6 = dict(paper_w_mm=105.0, paper_h_mm=148.0, cols=1, rows=1,
+                  margin_outer_mm=0.0, dpi=300)
+        fonte = make_image(self.tmp / "a6.png", 1240, 1748)
+
+        def rel(**kw):
+            cfg = cut_cfg(**{**a6, **kw})
+            return pi.ImpositionEngine([pi.ImageEntry(fonte)], cfg).quality_report()
+
+        sem = rel()
+        com = rel(bleed_mm=3.0, bleed_mode="included")
+        espelho = rel(bleed_mm=3.0, bleed_mode="mirror")
+        b = pi.ImpositionEngine([], cut_cfg(**a6, bleed_mm=3.0)).bleed_px()
+        self.assertEqual(com["cell"], (sem["cell"][0] + 2 * b, sem["cell"][1] + 2 * b))
+        self.assertLess(com["ratio"], sem["ratio"])
+        self.assertEqual(espelho["cell"], sem["cell"])         # espelhar não muda a célula
+
+
+class IncludedBleedBoxTests(unittest.TestCase):
+    """Fonte vetorial no modo «A arte já tem sangria»: a caixa de render vira (cw+2b, ch+2b)."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.svg = self.tmp / "deitado.svg"
+        self.svg.write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" '
+            'viewBox="0 0 300 200"><rect width="300" height="200"/></svg>',
+            encoding="utf-8")
+        self.calls = []
+
+        def fake_render(path, out_w, out_h):
+            self.calls.append((out_w, out_h))
+            return Image.new("RGBA", (out_w, out_h), (10, 10, 10, 255))
+
+        p = mock.patch.object(pi, "_svg_backend_render", fake_render)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def _engine(self, **kw):
+        cfg = pi.LayoutConfig()
+        cfg.cols, cfg.rows, cfg.dpi = 2, 2, 72
+        cfg.paper_w_mm, cfg.paper_h_mm = 100.0, 200.0     # célula em pé
+        cfg.margin_outer_mm = 10.0
+        cfg.margin_between_x_mm = cfg.margin_between_y_mm = 6.0
+        for k, v in kw.items():
+            setattr(cfg, k, v)
+        return pi.ImpositionEngine([pi.ImageEntry(str(self.svg))], cfg)
+
+    def test_sem_auto_rotate_a_caixa_e_a_celula_aumentada(self):
+        eng = self._engine(auto_rotate=False, bleed_mm=3.0, bleed_mode="included",
+                           fit_mode="stretch")
+        cw, ch = eng.cell_px(72)
+        b = eng.bleed_px(72)
+        self.assertGreater(b, 0)
+        self.calls.clear()
+        eng.compose_page(0, eng._expand(), override_dpi=72)
+        # stretch renderiza cobrindo a caixa (cw+2b, ch+2b): os dois lados >= a caixa.
+        self.assertGreaterEqual(self.calls[-1][0], cw + 2 * b - 1)
+        self.assertGreaterEqual(self.calls[-1][1], ch + 2 * b - 1)
+
+    def test_com_auto_rotate_a_caixa_nasce_girada_e_aumentada(self):
+        eng = self._engine(auto_rotate=True, bleed_mm=3.0, bleed_mode="included")
+        cw, ch = eng.cell_px(72)
+        b = eng.bleed_px(72)
+        self.calls.clear()
+        eng.compose_page(0, eng._expand(), override_dpi=72)
+        out_w, out_h = self.calls[-1]
+        bw, bh = cw + 2 * b, ch + 2 * b
+        # Arte deitada numa célula em pé: renderiza deitada na caixa (bh, bw).
+        self.assertLessEqual(out_w, bh + 1)
+        self.assertLessEqual(out_h, bw + 1)
+        self.assertTrue(abs(out_w - bh) <= 1 or abs(out_h - bw) <= 1)
+
+    def test_sem_sangria_a_caixa_continua_a_celula(self):
+        eng = self._engine(auto_rotate=False, bleed_mm=0.0, bleed_mode="included")
+        cw, ch = eng.cell_px(72)
+        self.calls.clear()
+        eng.compose_page(0, eng._expand(), override_dpi=72)
+        self.assertLessEqual(self.calls[-1][0], cw + 1)
+        self.assertLessEqual(self.calls[-1][1], ch + 1)
+
+    def test_modo_espelhar_nao_aumenta_a_caixa(self):
+        eng = self._engine(auto_rotate=False, bleed_mm=3.0, bleed_mode="mirror")
+        cw, ch = eng.cell_px(72)
+        self.calls.clear()
+        eng.compose_page(0, eng._expand(), override_dpi=72)
+        self.assertLessEqual(self.calls[-1][0], cw + 1)
+        self.assertLessEqual(self.calls[-1][1], ch + 1)
 
 
 class LauncherTests(unittest.TestCase):

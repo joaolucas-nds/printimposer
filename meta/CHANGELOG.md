@@ -8,6 +8,23 @@
 
 ---
 
+## [1.6.0] — 2026-11-06
+Marcas de canto e sangria (wo0010, F4 etapa 4 — fecha a F4). A conferência na tela e no papel está com o dono.
+
+### Adicionado
+- **Marcas de canto** na margem externa, uma em cada ponta de cada linha de corte (padrão de gráfica: 4 mm de comprimento, a 3 mm do corte, 0,25 pt, preto 100%). Com células coladas, vizinhas dividem um corte (uma marca); com espaçamento, cada borda tem a sua (duas). A distância efetiva nunca é menor que a sangria.
+- **Sangria** em mm (0–10; padrão 0) em dois modos: «Estender a borda (espelhar)» e «A arte já tem sangria» (a fonte é encaixada na célula aumentada pela sangria; PDF e SVG já rasterizados nessa caixa, na orientação final). A sangria nunca invade a célula vizinha (vai até metade do espaçamento) nem passa da margem externa.
+- **Avisos** na seção (âmbar: margem curta para as marcas, espaçamento menor que 2× a sangria; cinza: linhas atravessando com sangria) e **confirmação «Corte e sangria» antes de gerar** quando há aviso âmbar. A guarda de qualidade, no modo «já tem sangria», mede a fonte contra a célula aumentada.
+- `sheet_geometry(cfg)`: geometria de corte, sangria e marcas calculada em **mm**, função pura separada do desenho — a mesma que o desenhista vetorial da F5 vai reusar (DEC-015).
+- 46 testes headless (136 → 182).
+
+### Modificado
+- Seção «Linhas de corte» virou **«Corte e sangria»** (a chave `corte` do accordion não mudou). `cut_lines` (bool) virou `cut_guide` (`none`/`lines`/`marks`); configuração e presets da 1.5 continuam abrindo (`true` → «Linhas atravessando», `false` → «Nenhuma»). Campos novos nos presets: `mark_length_mm`, `mark_offset_mm`, `mark_width_pt`, `bleed_mm`, `bleed_mode`.
+- A posição de cada célula na folha vem da geometria em mm, arredondada uma vez por célula (antes somava px arredondados célula a célula); o tamanho da célula em px continua o de `cell_px`.
+- `VERSION` para 1.6.0; README para a 1.6.
+
+---
+
 ## [1.5.0] — 2026-11-04
 Formatos para compartilhar, guarda de qualidade dentro do PDF e conserto do SVG (wo0009). A conferência na tela está com o dono.
 

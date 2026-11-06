@@ -1,6 +1,6 @@
 # ANALISE — Portão da imposição vetorial (F4, etapa 3)
 
-> **Status:** Em discussao — sonda 1 feita (04/11); falta a sonda 2, com os PDFs do Figma do dono (seção «Medição pedida 2»)
+> **Status:** Decidida (2026-11-06) — **opção B** pelo critério fixado antes de medir; imposição vetorial vai para a F5, com gatilho de reabertura. Desfecho no fim.
 > **Data:** 2026-11-04
 > **Elos:** ROADMAP F4 (escada C, etapa 3) · `meta/analises/261103-ANALISE-ordem-f4.md` · DEC-001, DEC-003, DEC-005, DEC-014 · IDEAS «Entrada vetorial → imposição vetorial»
 
@@ -94,4 +94,26 @@ Insumos (só leitura): os 5 PDFs de `../este/` (`260528-Fecha mes.pdf`, `260528-
 5. Tempo de geração de cada lado.
 
 **O que esta sonda NÃO responde:** impressão no papel; leitor da gráfica; Affinity/Canva/Corel (só Figma).
+
+---
+
+## Desfecho *(2026-11-06)*
+
+**Sonda 2** (`261104-2110-code-printimposer-probe-vetorial2`, arquivada em `zz_notas-arquivadas/`), com os 5 PDFs reais do Figma do dono:
+
+| Critério | Resultado |
+|---|---|
+| 1. N-up correto | 5/5 folhas, deslocamento ≤ 2 px — ✅ |
+| 2. Diferença ≤ 2/255 + ganho visível | 1,109 a 1,401; **olho do dono: «se nota»** nos recortes do Figma (texto Type3 com bordas duras no vetorial, macias no raster) — ✅ |
+| 3. Vetorial ≤ 1/3 do raster sem perda a 300 DPI | **1,87 e 4,00** com 1 passada de dedup; **0,57 e 1,12** com 3 passadas (melhor caso medido) — ❌ |
+
+**Por que o 3 falhou, medido:** cada PDF do Figma carrega a mesma imagem de 823×642 px (logo, 1,7–3,6% da página) que pesa **404 KB dos ~445 KB** do arquivo; o conteúdo vetorial (texto Type3 + ~10 paths) é pequeno. E a folha raster com muito branco comprime bem (~400 KB por folha). Resultado: vetorial e raster ficam **do mesmo tamanho**, não 3× menor. O dedup do `pypdf` 6.21 precisou de **3 passadas** para juntar as cópias da imagem (a 1ª só junta a máscara).
+
+**Decisão: B, pelo critério.** C exigia as três condições e a 3 falhou nas duas fontes reais do dono (jsPDF e Figma). Não se muda o critério depois de ver o número. A imposição vetorial vai para a **F5**; a etapa 4 (marcas + sangria) vem primeiro, no motor raster, **com a geometria separada do desenho** — o que deixa a vetorial mais barata quando voltar.
+
+**O que a sonda provou e fica registrado para quando voltar:**
+- O ganho da vetorial, para o conteúdo do dono, é **nitidez do texto** (confirmado na tela pelo dono nas duas sondas), **não tamanho de arquivo**. O DEC-001 dizia «qualidade perfeita e arquivos minúsculos»: a primeira metade se confirmou, a segunda não, para estas fontes.
+- Biblioteca: `pypdf` (acertou de primeira, preserva bytes de JPEG e PNG, deduplica — com **passadas repetidas** até estabilizar; nomes novos `remove_duplicates`/`remove_unreferenced` no 6.21).
+
+**Gatilho de reabertura (o que a sonda não respondeu):** **o papel.** O critério 2 foi visto na tela, num recorte a 600 DPI. Se uma **impressão de teste** da mesma folha — raster do app a 300 DPI × vetorial — mostrar o texto do raster visivelmente mais mole no papel, na impressora de casa ou na gráfica, a vetorial sobe da F5 para logo depois da etapa 4. Teste de bolso: imprimir as duas versões da folha `figma-1x2` da sonda 2 e comparar com lupa ou a olho a 30 cm.
 

@@ -45,7 +45,7 @@
 - ⏳ Nitidez em zoom 125%/150% — segue sem exercitar (monitor a 100%). Movida para a F4.
 - ✅ Conferência visual do dono (03/11): menus, accordion, atalhos de teclado, presets sem reiniciar, atalho na pasta-pai — tudo certo.
 
-## 🟡 F4 — Qualidade profissional *(em curso — escada C)*
+## 🟢 F4 — Qualidade profissional *(concluída na 1.6.0 — 07/11)*
 **Objetivo:** aproximar a saída do padrão de gráfica e acabar com a perda de qualidade na origem.
 **Critério de conclusão:** PDF entra como fonte vetorial; marcas de canto e sangria disponíveis; compressão escolhível.
 **Ordem (escada C — `meta/analises/261103-ANALISE-ordem-f4.md`, aprovada em 03/11):**
@@ -54,11 +54,12 @@
 - ✅ **Intercalada — 1.4.1, robustez** (pedido do dono em 04/11; roteiro feito em 04/11: tudo certo): erro de abertura gravado e mostrado mesmo via `.bat`; aviso visível do segundo destino; configuração congelada durante a geração; guia rápido sem amarrar a uma ferramenta.
 - ✅ **Intercalada — 1.5.0** (escolha do dono em 04/11): SVG sem ampliação com Auto-Rotate e Preencher; guarda de qualidade olhando as imagens dentro do PDF; saída WebP e AVIF para compartilhar. Roteiro do dono em 04/11: tudo certo. Em paralelo, as sondas do portão (`meta/analises/261104-ANALISE-portao-vetorial.md`).
 - ✅ **Etapa 3 — portão (decidido em 06/11): opção B** — imposição vetorial vai para a **F5**. Critério 3 (arquivo ≤ 1/3 do raster) falhou nas duas fontes reais do dono (jsPDF: 0,41–3,9×; Figma: 0,57–4,0×); o ganho medido é nitidez do texto, não tamanho. Gatilho de reabertura: impressão de teste mostrar o texto do raster mole no papel. `meta/analises/261104-ANALISE-portao-vetorial.md`.
-- ▶ **Etapa 4 — 1.6.0 (próxima):** marcas de corte de canto (ticks no gutter, alternativa às linhas atravessadas, DEC-005) + sangria em mm. A geometria (corte, sangria, segmentos de marca) nasce separada do desenho, porque PNG/JPEG/TIFF/WebP seguem raster qualquer que seja o portão.
+- ✅ **Etapa 4 — 1.6.0** (`meta/specs/261106-SPEC-F4-etapa4.md`, roteiro do dono em 07/11: tudo certo): marcas de corte de canto (ticks no gutter, alternativa às linhas atravessadas, DEC-005) + sangria em mm. A geometria (corte, sangria, segmentos de marca) nasce separada do desenho, porque PNG/JPEG/TIFF/WebP seguem raster qualquer que seja o portão.
+- ✅ **Critério de conclusão atingido (07/11):** PDF entra como fonte (1.4.0, rasterizado na célula; a imposição vetorial foi para a F5 pela DEC-015); marcas de canto e sangria (1.6.0); compressão escolhível (1.3.0).
 - ✅ ~~Entrada SVG~~ — antecipada e entregue na 1.1.0.
 - ⏳ Nitidez em zoom 125%/150% — conferir quando houver monitor ou escala para testar (herdada da F3).
 
-## 🔵 F5 — Distribuição, fluidez e layouts livres *(futuro, sem data)*
+## 🟡 F5 — Distribuição, fluidez e layouts livres *(próxima — ordem interna ainda NÃO decidida)*
 **Objetivo:** facilitar adoção por quem não tem Python e soltar as amarras do grid regular.
 **Critério de conclusão:** executável Windows distribuível; manipulação por arraste; layout não-uniforme possível.
 - **Imposição vetorial do PDF** (vinda do portão da F4, 06/11): modo «Vetorial» na compressão do PDF via `pypdf`, como segundo desenhista sobre a geometria da etapa 4. Ganho medido: nitidez do texto; tamanho ≈ igual ao raster. Sobe antes se a impressão de teste mostrar o texto raster mole no papel.

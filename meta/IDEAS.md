@@ -33,6 +33,12 @@ Mandar para a impressora sem arquivo intermediário. No Windows passa por API de
 
 ## 🤖 Ideias Ativas — Assistente
 
+### 2026-11-07 — Marcas de corte nos cantos internos (entre células)
+Hoje (1.6.0) as marcas de canto ficam só na margem externa, uma por ponta de cada corte — o padrão de cartões em lote. Marca no cruzamento interno ajudaria quem corta com estilete célula a célula, mas com espaçamento pequeno cairia sobre a arte vizinha; ficou fora de escopo na spec da etapa 4. Só faz sentido com espaçamento ≥ 2 × (distância + comprimento). **F5, se pedido.**
+
+### 2026-11-07 — Aviso de sangria externa limitada pela margem
+Com margem externa menor que a sangria, a sangria da borda externa é recortada pela margem **sem aviso próprio** — o aviso âmbar da 1.6.0 só cobre o espaçamento entre células (achado da sonda do Code na wo0010). Proposta: aviso âmbar «A margem externa (X mm) é menor que a sangria (Y mm): a sangria da borda vai até X mm». Pequeno; decisão pendente com o dono. **1.6.1 ou primeira versão da F5.**
+
 ### 2026-07-22 — Barra de progresso e status também merecem revisão
 A barra inferior tem um `CTkProgressBar` sempre visível mesmo parado, ocupando largura sem informar nada. Poderia aparecer só durante a geração, liberando espaço para o texto de status (onde entra o aviso do segundo destino). Pequeno, cosmético, na linha de "o que não informa não ocupa".
 

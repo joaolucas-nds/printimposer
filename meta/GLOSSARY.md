@@ -50,6 +50,17 @@
 - **Smoke test** — checklist manual de 9 itens da GUI, no `CLAUDE.md`. É o que a suíte headless não alcança.
 - **Raia de execução** — papel do Claude Code desde a DEC-012: implementa o código a partir da spec/WO, roda suíte e GUI, faz o smoke, commita e empurra no verde. O chat é a raia de planejamento (spec, análise, WO). *(Até 2026-11-03 era «raia de validação», DEC-010.)*
 
+## Termos da F4 (qualidade, corte e sangria)
+- **PDF sem perda** — saída PDF do escritor próprio (DEC-014): o fluxo do PNG da folha embutido com `/FlateDecode`, sem recomprimir. O PDF antigo era JPEG por dentro.
+- **Guarda de qualidade (imagem interna)** — desde a 1.5.0 a guarda mede também as imagens embutidas numa página PDF (as que cobrem ≥ 10% dela); o selo cita `… .pdf · p. N (imagem interna)`.
+- **Corte (trim)** — a borda final da peça depois de cortada; em cada célula, é o retângulo da célula.
+- **Sangria (bleed)** — faixa da arte além do corte, para não sobrar fio branco se o corte desviar; padrão de mercado 3 mm. Modos: **espelhar** (o app estende a borda) e **a arte já tem sangria** (a arte foi exportada maior, ex.: A6 = 111 × 154 mm).
+- **Marcas de canto (crop marks)** — traços curtos na margem externa, um em cada ponta de cada linha de corte; padrão 4 mm, a 3 mm do corte, 0,25 pt, preto. Com espaçamento entre células, cada espaço tem duas (uma por corte).
+- **`sheet_geometry`** — função pura que calcula em mm células, sangria, cortes, marcas e avisos; o motor raster desenha a partir dela, e o desenhista vetorial da F5 vai reusá-la.
+- **Portão (da F4)** — a decisão sobre a imposição vetorial, tomada por critério fixado antes de medir; resultado B (DEC-015).
+- **Sonda** — medição que o Code roda sem editar o repo nem commitar, devolvendo número cru + comando; o relatório vai para a pasta-pai.
+- **Roteiro do dono** — o que o dono abre, faz e vê quando está certo, para conferir uma mudança de interface; vai escrito no chat, no mesmo turno da WO.
+
 ## Ferramentas do fluxo de trabalho
 - **KCM / Kit de Contexto Universal** — o sistema de documentação (CEREBRO, CONTEXT, STATUS, DECISIONS…) que permite trocar de conversa sem perder contexto. Versão adotada: v1.133.0 (2026-11-03).
 - **ASU (Atualizador Automático de Scripts)** — ferramenta que aplica edições cirúrgicas em arquivos a partir de uma instrução `.yaml`. **Aposentado em 2026-11-03 (DEC-012)**; foi o modo de edição de código de 18/07 a 03/11 (DEC-007). Guia arquivado em `zz_backups/261103-INSTRUCTION_GUIDE-asu.md`.
@@ -61,6 +72,6 @@
 ## Identificadores
 - **DEC-N** — decisão de arquitetura/design em DECISIONS.md.
 - **FIX-N** — bug grave resolvido em DECISIONS.md.
-- **F1…F4** — fases do ROADMAP.
+- **F1…F5** — fases do ROADMAP (F1–F4 concluídas; F5 é a próxima).
 - **N-up livre** — grade definida por `colunas × linhas` arbitrárias, sem lista cadastrada (DEC-009).
 - **Preset** — configuração inteira salva com nome: grade + papel + DPI + margens + corte + formato.

@@ -52,6 +52,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from PIL import Image
 import print_imposer as pi  # noqa: E402
+import imposer_core as core  # noqa: E402
 
 
 def make_image(path: Path, w: int, h: int, color=(120, 90, 200)):
@@ -519,7 +520,7 @@ class ExtraFormatsTests(unittest.TestCase):
         saved = sys.modules.get("pillow_heif")
         sys.modules["pillow_heif"] = None              # import vira ImportError
         try:
-            self.assertFalse(pi._probe_heif())
+            self.assertFalse(core._probe_heif())
         finally:
             if saved is None:
                 sys.modules.pop("pillow_heif", None)
@@ -566,7 +567,7 @@ class SvgTests(unittest.TestCase):
     @unittest.skipIf(pi.SVG_BACKEND is None, "sem back-end de SVG")
     def test_modulos_do_backend_ficam_acessiveis(self):
         """REGRESSÃO: o probe importava local e o nome sumia do escopo do módulo."""
-        self.assertTrue(pi._SVG_MODS)
+        self.assertTrue(core._SVG_MODS)
         pi.rasterize_svg(str(self.svg), 64, 90)   # levantaria NameError antes
 
     @unittest.skipIf(pi.SVG_BACKEND is None, "sem back-end de SVG")
@@ -601,9 +602,9 @@ class PdfInputTests(unittest.TestCase):
             return Image.new("RGBA", (bw, bh), (shade, shade, shade, 255))
 
         self.patches = [
-            mock.patch.object(pi, "SUPPORTED_EXT", pi.SUPPORTED_EXT | {".pdf"}),
-            mock.patch.object(pi, "rasterize_pdf", fake_raster),
-            mock.patch.object(pi, "pdf_page_size", lambda path, page: (300.0, 200.0)),
+            mock.patch.object(core, "SUPPORTED_EXT", core.SUPPORTED_EXT | {".pdf"}),
+            mock.patch.object(core, "rasterize_pdf", fake_raster),
+            mock.patch.object(core, "pdf_page_size", lambda path, page: (300.0, 200.0)),
         ]
         for p in self.patches:
             p.start()
@@ -623,7 +624,7 @@ class PdfInputTests(unittest.TestCase):
         self.assertNotIn(".pdf", pi.RASTER_EXT)
 
     def test_n_paginas_viram_n_itens_com_rotulo(self):
-        with mock.patch.object(pi, "pdf_page_count", lambda p: 3):
+        with mock.patch.object(core, "pdf_page_count", lambda p: 3):
             items, skipped = pi.plan_ingest([str(self.pdf)])
         self.assertEqual(items, [(str(self.pdf), i, 3) for i in range(3)])
         self.assertEqual(skipped, [])
@@ -638,14 +639,14 @@ class PdfInputTests(unittest.TestCase):
             perguntas.append((nome, n))
             return False
 
-        with mock.patch.object(pi, "pdf_page_count", lambda p: 120):
+        with mock.patch.object(core, "pdf_page_count", lambda p: 120):
             items, skipped = pi.plan_ingest([str(self.pdf)], confirm_many=nao)
             self.assertEqual(items, [])
             self.assertEqual(perguntas, [("livro.pdf", 120)])
             self.assertEqual(skipped[0][0], "livro.pdf")
             items, _ = pi.plan_ingest([str(self.pdf)], confirm_many=lambda n, c: True)
             self.assertEqual(len(items), 120)
-        with mock.patch.object(pi, "pdf_page_count", lambda p: 50):
+        with mock.patch.object(core, "pdf_page_count", lambda p: 50):
             items, _ = pi.plan_ingest([str(self.pdf)], confirm_many=nao)
             self.assertEqual(len(items), 50)       # 50 exatos não pede confirmação
 
@@ -655,14 +656,14 @@ class PdfInputTests(unittest.TestCase):
         def contador(p):
             raise RuntimeError("Failed to load document (PDFium: Incorrect password error)")
 
-        with mock.patch.object(pi, "pdf_page_count", contador):
+        with mock.patch.object(core, "pdf_page_count", contador):
             items, skipped = pi.plan_ingest([bom, str(self.pdf)])
         self.assertEqual(items, [(bom, 0, 1)])
         self.assertEqual(skipped, [("livro.pdf", "protegido por senha")])
-        with mock.patch.object(pi, "pdf_page_count", lambda p: 0):
+        with mock.patch.object(core, "pdf_page_count", lambda p: 0):
             _, skipped = pi.plan_ingest([str(self.pdf)])
         self.assertEqual(skipped, [("livro.pdf", "sem páginas")])
-        with mock.patch.object(pi, "pdf_page_count",
+        with mock.patch.object(core, "pdf_page_count",
                                mock.Mock(side_effect=ValueError("lixo"))):
             _, skipped = pi.plan_ingest([str(self.pdf)])
         self.assertEqual(skipped, [("livro.pdf", "ilegível ou corrompido")])
@@ -731,7 +732,7 @@ class PdfRealTests(unittest.TestCase):
         pi.write_pdf(pags, self.pdf, 100)
 
     def test_sondagem_guardou_o_modulo(self):
-        self.assertTrue(pi._PDF_MODS)
+        self.assertTrue(core._PDF_MODS)
         self.assertIn(".pdf", pi.SUPPORTED_EXT)
 
     def test_tres_paginas_viram_tres_itens(self):
@@ -799,13 +800,15 @@ class TkAttributeCollisionTests(unittest.TestCase):
     RESERVADOS = {"_w", "_name", "_tclCommands", "master", "tk", "children"}
 
     def setUp(self):
-        self.src = (Path(__file__).resolve().parent.parent / "print_imposer.py"
-                    ).read_text(encoding="utf-8")
-        self.tree = ast.parse(self.src)
+        # Lê os DOIS módulos (DEC-017): widget novo pode nascer em qualquer um.
+        raiz = Path(__file__).resolve().parent.parent
+        self.src = (raiz / "print_imposer.py").read_text(encoding="utf-8")
+        self.trees = [ast.parse(self.src),
+                      ast.parse((raiz / "imposer_core.py").read_text(encoding="utf-8"))]
 
     def _classes_de_widget(self):
         """Classes que herdam de algo do tkinter/customtkinter."""
-        for node in ast.walk(self.tree):
+        for node in (n for tree in self.trees for n in ast.walk(tree)):
             if not isinstance(node, ast.ClassDef):
                 continue
             for base in node.bases:
@@ -1040,7 +1043,7 @@ class MenuAndDialogTests(unittest.TestCase):
         self.assertLessEqual(pi.ConfigPanel.BOTTOM_H, 84)
 
     def test_versao(self):
-        self.assertEqual(pi.VERSION, "1.8.0")
+        self.assertEqual(pi.VERSION, "1.8.1")
 
 
 class StartupErrorTests(unittest.TestCase):
@@ -1217,7 +1220,7 @@ class SvgFinalOrientationTests(unittest.TestCase):
             self.calls.append((out_w, out_h))
             return Image.new("RGBA", (out_w, out_h), (10, 10, 10, 255))
 
-        p = mock.patch.object(pi, "_svg_backend_render", fake_render)
+        p = mock.patch.object(core, "_svg_backend_render", fake_render)
         p.start()
         self.addCleanup(p.stop)
 
@@ -1250,12 +1253,12 @@ class SvgFinalOrientationTests(unittest.TestCase):
     def test_sem_medidas_mede_pelo_backend(self):
         f = self.tmp / "nu.svg"
         f.write_text('<svg xmlns="http://www.w3.org/2000/svg"/>', encoding="utf-8")
-        with mock.patch.object(pi, "_svg_backend_size", lambda p: (64.0, 32.0)):
+        with mock.patch.object(core, "_svg_backend_size", lambda p: (64.0, 32.0)):
             self.assertEqual(pi.svg_intrinsic_size(str(f)), (64.0, 32.0))
 
     def test_cache_por_caminho_e_mtime(self):
         pi.svg_intrinsic_size(str(self.svg))
-        with mock.patch.object(pi, "_svg_backend_size",
+        with mock.patch.object(core, "_svg_backend_size",
                                side_effect=AssertionError("não devia medir de novo")):
             self.assertEqual(pi.svg_intrinsic_size(str(self.svg)), (300.0, 200.0))
 
@@ -1411,7 +1414,7 @@ class SemPdfiumGuardTests(unittest.TestCase):
         pdf = tmp / "x.pdf"
         pdf.write_bytes(b"%PDF-1.4 stub")
         cfg = pi.LayoutConfig()
-        with mock.patch.object(pi, "PDF_OK", False):
+        with mock.patch.object(core, "PDF_OK", False):
             q = pi.ImpositionEngine([pi.ImageEntry(str(pdf))], cfg).quality_report()
         self.assertEqual(q["level"], "none")
 
@@ -1447,7 +1450,7 @@ class WebpAvifOutputTests(unittest.TestCase):
     def test_sondagem_grava_de_verdade(self):
         """`features.check` verdadeiro não basta: a sonda faz um save real (FIX-002)."""
         with mock.patch.object(Image.Image, "save", side_effect=OSError("só leitura")):
-            self.assertFalse(pi._probe_can_save("AVIF"))
+            self.assertFalse(core._probe_can_save("AVIF"))
 
     def test_cada_formato_grava_reabre_e_tem_o_tamanho_da_folha(self):
         casos = [("WEBP", {"webp_compression": "lossless"}),
@@ -1488,7 +1491,7 @@ class WebpAvifOutputTests(unittest.TestCase):
         self.assertEqual((cfg.webp_compression, cfg.output_format), ("lossless", "PNG"))
 
     def test_avif_de_preset_some_se_a_maquina_nao_grava(self):
-        with mock.patch.object(pi, "OUT_FORMATS", ["PNG", "PDF", "JPEG", "TIFF", "WEBP"]):
+        with mock.patch.object(core, "OUT_FORMATS", ["PNG", "PDF", "JPEG", "TIFF", "WEBP"]):
             cfg = pi.LayoutConfig()
             cfg.from_dict({"output_format": "AVIF"})
             self.assertEqual(cfg.output_format, "PNG")
@@ -1922,7 +1925,7 @@ class IncludedBleedBoxTests(unittest.TestCase):
             self.calls.append((out_w, out_h))
             return Image.new("RGBA", (out_w, out_h), (10, 10, 10, 255))
 
-        p = mock.patch.object(pi, "_svg_backend_render", fake_render)
+        p = mock.patch.object(core, "_svg_backend_render", fake_render)
         p.start()
         self.addCleanup(p.stop)
 
@@ -2170,7 +2173,7 @@ class RotationTests(unittest.TestCase):
         svg = self.tmp / "d.svg"
         svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"/>',
                        encoding="utf-8")
-        with mock.patch.object(pi, "_svg_backend_render", fake_render):
+        with mock.patch.object(core, "_svg_backend_render", fake_render):
             pi.open_source(str(svg), 200, 100, auto_rotate=False, rotation=90)
             pi.open_source(str(svg), 200, 100, auto_rotate=False, rotation=180)
         # Arte 3:2 deitada. 90°: renderiza na caixa (ch, cw) = 100×200 (largura ≤ 100,
@@ -2295,6 +2298,55 @@ class LauncherTests(unittest.TestCase):
         self.assertIn("start \"\"", content)
         self.assertIn("print_imposer.py", content)
         self.assertIn("\r\n", content)   # CRLF, como .bat espera
+
+
+class CoreBoundaryTests(unittest.TestCase):
+    """DEC-017: o núcleo (`imposer_core.py`) não conhece Tk e é o dono dos nomes que lê."""
+
+    PROIBIDOS = ("tkinter", "customtkinter", "tkinterdnd2")
+
+    def test_ast_do_nucleo_nao_importa_tk(self):
+        src = (Path(__file__).resolve().parent.parent / "imposer_core.py"
+               ).read_text(encoding="utf-8")
+        achados = []
+        for node in ast.walk(ast.parse(src)):
+            if isinstance(node, ast.Import):
+                mods = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                mods = [node.module or ""]
+            else:
+                continue
+            achados += [m for m in mods if m.split(".")[0] in self.PROIBIDOS]
+        self.assertEqual(achados, [])
+
+    def test_importar_o_nucleo_nao_carrega_tk(self):
+        import subprocess
+        raiz = Path(__file__).resolve().parent.parent
+        code = ("import sys, imposer_core; "
+                "print([m for m in %r if m in sys.modules])" % (self.PROIBIDOS,))
+        out = subprocess.run([sys.executable, "-c", code], cwd=str(raiz),
+                             capture_output=True, text=True, check=True)
+        self.assertEqual(out.stdout.strip(), "[]")
+
+    @unittest.skipUnless(core.PDF_OK, "sem pypdfium2")
+    def test_patch_no_nucleo_vale_para_a_guarda_de_qualidade(self):
+        # O nome é LIDO pelo núcleo: patch em `pi.PDF_OK` seria uma cópia inerte.
+        # PDF real com imagem de baixa resolução: sem o patch a guarda reclama.
+        tmp = Path(tempfile.mkdtemp())
+        pdf = str(tmp / "baixa.pdf")
+        pi.write_pdf([Image.new("RGB", (120, 170), (90, 90, 90))], pdf, 20)
+        cfg = pi.LayoutConfig()
+        cfg.cols = cfg.rows = 1
+
+        def nivel():
+            return pi.ImpositionEngine([pi.ImageEntry(pdf)], cfg).quality_report()["level"]
+
+        self.assertNotEqual(nivel(), "none")
+        with mock.patch.object(core, "PDF_OK", False):
+            self.assertEqual(nivel(), "none")
+        with mock.patch.object(pi, "PDF_OK", False):     # cópia: o núcleo não vê
+            self.assertNotEqual(nivel(), "none")
+        self.assertIs(pi.ImpositionEngine, core.ImpositionEngine)
 
 
 if __name__ == "__main__":

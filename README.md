@@ -1,4 +1,4 @@
-# 🖨 PrintImposer v1.8
+# 🖨 PrintImposer v1.8.1
 
 **Imposição de páginas para impressão em massa** — junte dezenas de imagens em folhas prontas para imprimir e cortar.
 
@@ -70,7 +70,7 @@ Use **`Opções › Criar atalho…`**. O diálogo explica o que o atalho faz e 
 ## 🖥 A janela
 
 ```
-┌ PrintImposer   Arquivo  Opções  Ajuda   v1.8.0 · SVG: … · PDF: … ┐
+┌ PrintImposer   Arquivo  Opções  Ajuda   v1.8.1 · SVG: … · PDF: … ┐
 ├────────────┬──────────────────────────────┬────────────────────────┤
 │ Imagens    │ Grade (colunas × linhas)  ◼◼ │ Preview         ◀  ▶   │
 │            │ ┌ seções recolhíveis ──────┐ │                        │
@@ -228,7 +228,8 @@ Em `%USERPROFILE%\.printimposer\` (no Linux/macOS, `~/.printimposer/`): `setting
 
 ```
 printimposer/
-├── print_imposer.py      # o app inteiro, em um arquivo
+├── print_imposer.py      # a janela (GUI) — é este que se abre
+├── imposer_core.py       # o motor: cálculo, geometria, PDF, sem interface
 ├── tests/test_engine.py  # suíte headless: python tests/test_engine.py
 ├── CLAUDE.md             # guia para o Claude Code
 ├── .claude/              # permissões e skills do Claude Code
@@ -240,4 +241,4 @@ O motor de composição (`ImpositionEngine`) não depende da interface: testes e
 
 ---
 
-*PrintImposer v1.8.0 — uso pessoal/profissional de impressão em massa.*
+*PrintImposer v1.8.1 — uso pessoal/profissional de impressão em massa.*

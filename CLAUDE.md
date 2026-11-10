@@ -6,7 +6,7 @@
 
 ## O que é este projeto
 Ferramenta desktop (Python + CustomTkinter) que agrupa várias imagens em folhas para impressão —
-ex.: 4 cards A6 numa folha A4, prontos para imprimir e cortar. Arquivo único: `print_imposer.py`.
+ex.: 4 cards A6 numa folha A4, prontos para imprimir e cortar. Dois módulos (DEC-017): `imposer_core.py` (motor, sem Tk) e `print_imposer.py` (GUI e `main()`).
 
 ## Seu papel aqui (DEC-012, que substitui a DEC-007 e a DEC-010)
 - **O chat** planeja: decide arquitetura, escreve spec (`meta/specs/`), análise e WO (`meta/workorders/`),

@@ -8,6 +8,19 @@
 
 ---
 
+## [1.8.1] — 2026-11-10
+Reorganização em dois módulos (wo0014, DEC-017). Nada muda para quem usa; o dono ainda vai abrir o app uma vez.
+
+### Modificado
+- Código dividido em `imposer_core.py` (motor, sem Tk) e `print_imposer.py` (GUI e `main()`); a GUI reexporta o núcleo. Saída idêntica à 1.8.0: 24 de 24 folhas com o mesmo SHA-256 (SVG sem back-end neste Python, ficou de fora).
+- `VERSION` (1.8.1) passa a morar no núcleo; README e CLAUDE.md descrevem os dois módulos.
+- Testes: 16 patches passam a mirar `imposer_core` (o módulo que lê o nome); 3 testes novos de fronteira (218 → 221).
+
+### Corrigido
+- `SemPdfiumGuardTests.test_sem_backend_pdf_nada_muda` passava sem testar nada: patchava `PDF_OK` na cópia da GUI, e o PDF de mentira já dava `none` de qualquer jeito. Agora o patch mira o núcleo e o teste novo da fronteira exige PDF real com nível diferente de `none` antes do patch.
+
+---
+
 ## [1.8.0] — 2026-11-10
 Rotação por item e preencher folhas (wo0013, F5 etapa 2). A conferência na tela está com o dono.
 

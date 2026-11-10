@@ -1,4 +1,4 @@
-# 🖨 PrintImposer v1.7
+# 🖨 PrintImposer v1.8
 
 **Imposição de páginas para impressão em massa** — junte dezenas de imagens em folhas prontas para imprimir e cortar.
 
@@ -70,7 +70,7 @@ Use **`Opções › Criar atalho…`**. O diálogo explica o que o atalho faz e 
 ## 🖥 A janela
 
 ```
-┌ PrintImposer   Arquivo  Opções  Ajuda   v1.7.0 · SVG: … · PDF: … ┐
+┌ PrintImposer   Arquivo  Opções  Ajuda   v1.8.0 · SVG: … · PDF: … ┐
 ├────────────┬──────────────────────────────┬────────────────────────┤
 │ Imagens    │ Grade (colunas × linhas)  ◼◼ │ Preview         ◀  ▶   │
 │            │ ┌ seções recolhíveis ──────┐ │                        │
@@ -99,9 +99,10 @@ A coluna do meio tem três zonas:
 | **+ Arquivos** / **+ Pasta**, ou **soltar** na janela | Adiciona imagens soltas ou uma pasta inteira. Arrastar do Explorer para qualquer ponto da janela faz o mesmo (precisa do `tkinterdnd2`). Não muda a pasta de saída. |
 | **Limpar** | Esvazia a lista. |
 | **Qtd** (`+`/`−` ou digitar) | Quantas cópias daquela imagem entram nas folhas. |
-| **≡** (alça), **▲ ▼** e **✕** | Arraste a imagem pela alça até outra posição, ou use as setas; **✕** remove. |
+| **≡** (alça), **▲ ▼**, **⟳** e **✕** | Arraste a imagem pela alça até outra posição, ou use as setas. **⟳** gira a imagem 90° no sentido horário a cada clique: em **0°** o Auto-Rotate decide; em 90°, 180° e 270° ela sai exatamente assim. **✕** remove. |
+| **Preencher ▾** | **Completar a última folha** soma as cópias que faltam, uma por imagem, na ordem da lista. **Exatamente N folhas…** troca as quantidades para encher N folhas, igual para todas (pede confirmação). As quantidades continuam editáveis. |
 
-**Dica:** para 4 cópias do mesmo card, adicione-o uma vez e ponha **Qtd = 4**.
+**Dica:** para 4 cópias do mesmo card, adicione-o uma vez e ponha **Qtd = 4**. Para 10 folhas de uma série, use **Preencher ▾ › Exatamente N folhas…**.
 
 ### Grade (topo)
 Use `+`/`−` em **Colunas** e **Linhas**, ou digite os números e clique em **Aplicar valores digitados**. A miniatura ao lado mostra a ordem das células. O menu **Atalhos** tem as grades mais comuns:
@@ -239,4 +240,4 @@ O motor de composição (`ImpositionEngine`) não depende da interface: testes e
 
 ---
 
-*PrintImposer v1.7.0 — uso pessoal/profissional de impressão em massa.*
+*PrintImposer v1.8.0 — uso pessoal/profissional de impressão em massa.*

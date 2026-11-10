@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PrintImposer v1.7.0
+PrintImposer v1.8.0
 Ferramenta de Imposição de Páginas para Impressão em Massa
 
 Selecione imagens, configure o layout e gere PDFs/PNGs prontos para impressão.
@@ -63,6 +63,12 @@ Novidades da 1.7 (fase F5, etapa 1 — SPEC-F5-arrastar):
   - Reordenar a lista arrastando pela alça «≡» (Tk puro, sem dependência)
   - Aviso âmbar quando a margem externa é menor que a sangria
   - Cabeçalho e «Sobre» mostram o estado do arrastar
+
+Novidades da 1.8 (fase F5, etapa 2 — SPEC-F5-tiragem):
+  - Rotação por item (botão «⟳»): 0° segue o Auto-Rotate; 90/180/270° são
+    exatos, com a fonte vetorial rasterizada já na orientação final
+  - «Preencher»: completar a última folha ou exatamente N folhas, mexendo
+    nas quantidades à vista
 """
 
 import os
@@ -77,7 +83,7 @@ from pathlib import Path
 from typing import List, Tuple, Optional, Dict, Any, NamedTuple
 
 import tkinter as tk
-from tkinter import filedialog, messagebox, colorchooser
+from tkinter import filedialog, messagebox, colorchooser, simpledialog
 
 import customtkinter as ctk
 ctk.set_appearance_mode("dark")
@@ -234,7 +240,7 @@ HEIF_OK: bool = _probe_heif()
 # CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION  = "1.7.0"
+VERSION  = "1.8.0"
 APP_NAME = "PrintImposer"
 MM_TO_INCH = 1.0 / 25.4
 
@@ -596,9 +602,10 @@ def is_vector(path: str) -> bool:
 
 
 class SourceRef(NamedTuple):
-    """Referência de fonte: arquivo + página (0 para tudo que não é PDF)."""
+    """Referência de fonte: arquivo + página (0 para tudo que não é PDF) + rotação manual."""
     path: str
     page: int = 0
+    rotation: int = 0       # 0 = Auto-Rotate decide; 90/180/270 = exato, sentido horário
 
 
 def as_ref(src: Any) -> SourceRef:
@@ -631,23 +638,39 @@ def pdf_page_size(path: str, page: int) -> Tuple[float, float]:
         doc.close()
 
 
+def effective_rotation(src_w: float, src_h: float, cell_w: float, cell_h: float,
+                       auto_rotate: bool, manual: int = 0) -> int:
+    """Giro (graus, horário) que a fonte recebe na célula.
+
+    Manual ≠ 0 é exato e o Auto-Rotate não age; manual 0 devolve 90 quando o
+    Auto-Rotate está ligado e a orientação da fonte difere da célula. Única
+    fonte da decisão: caixa de render, `_place_image` e guarda de qualidade
+    passam por aqui (FIX-006: decidir em dois lugares amplia a arte em silêncio).
+    """
+    if manual:
+        return manual
+    if auto_rotate and src_w > 0 and src_h > 0 and (cell_w >= cell_h) != (src_w >= src_h):
+        return 90
+    return 0
+
+
 def vector_render_box(w: float, h: float, cw: int, ch: int,
-                      auto_rotate: bool) -> Tuple[int, int]:
+                      auto_rotate: bool, manual: int = 0) -> Tuple[int, int]:
     """Caixa onde uma fonte vetorial (PDF ou SVG) deve ser rasterizada, JÁ na orientação final.
 
-    Com Auto-Rotate e orientação da fonte diferente da célula, o motor girará
-    a imagem 90°; renderizar na caixa (cw, ch) e girar depois desenharia a arte
-    pequena e a ampliaria. Por isso a caixa nasce girada: (ch, cw).
+    Se o motor girará a imagem 90° ou 270° (Auto-Rotate ou rotação manual),
+    renderizar na caixa (cw, ch) e girar depois desenharia a arte pequena e a
+    ampliaria. Por isso a caixa nasce girada: (ch, cw).
     """
-    if auto_rotate and (cw >= ch) != (w >= h):
+    if effective_rotation(w, h, cw, ch, auto_rotate, manual) in (90, 270):
         return ch, cw
     return cw, ch
 
 
 def pdf_render_box(w_pt: float, h_pt: float, cw: int, ch: int,
-                   auto_rotate: bool) -> Tuple[int, int]:
+                   auto_rotate: bool, manual: int = 0) -> Tuple[int, int]:
     """Caixa de render da página PDF — ver `vector_render_box`."""
-    return vector_render_box(w_pt, h_pt, cw, ch, auto_rotate)
+    return vector_render_box(w_pt, h_pt, cw, ch, auto_rotate, manual)
 
 
 PDF_IMG_MIN_COVER = 0.10    # imagem que cobre menos que isso da página é logo/ícone
@@ -698,7 +721,7 @@ def pdf_inner_images(path: str, page: int) -> List[Tuple[int, int, float, float]
 
 
 def pdf_inner_ratio(path: str, page: int, cw: int, ch: int,
-                    auto_rotate: bool, fit_mode: str) -> Optional[float]:
+                    auto_rotate: bool, fit_mode: str, manual: int = 0) -> Optional[float]:
     """Pior razão (px da imagem / px que ela ocupa na célula) entre as imagens da página.
 
     A escala da página na célula é a MESMA do `rasterize_pdf` (inclusive a caixa
@@ -708,7 +731,7 @@ def pdf_inner_ratio(path: str, page: int, cw: int, ch: int,
     if not imgs:
         return None
     w_pt, h_pt = pdf_page_size(path, page)
-    box_w, box_h = vector_render_box(w_pt, h_pt, cw, ch, auto_rotate)
+    box_w, box_h = vector_render_box(w_pt, h_pt, cw, ch, auto_rotate, manual)
     if fit_mode == "stretch":
         sx, sy = box_w / w_pt, box_h / h_pt
     else:
@@ -748,21 +771,22 @@ def rasterize_pdf(path: str, page: int, box_w: int, box_h: int,
 
 
 def open_source(path: str, box_w: int = 0, box_h: int = 0, page: int = 0,
-                auto_rotate: bool = False, fit_mode: str = "fit") -> Image.Image:
+                auto_rotate: bool = False, fit_mode: str = "fit",
+                rotation: int = 0) -> Image.Image:
     """Abre uma imagem-fonte. SVG e PDF são rasterizados na caixa pedida; raster abre direto."""
     if is_pdf(path):
         if box_w <= 0 or box_h <= 0:
             box_w = box_h = 1000  # tamanho de cortesia para inspeção/miniatura
         else:
             w_pt, h_pt = pdf_page_size(path, page)
-            box_w, box_h = vector_render_box(w_pt, h_pt, box_w, box_h, auto_rotate)
+            box_w, box_h = vector_render_box(w_pt, h_pt, box_w, box_h, auto_rotate, rotation)
         return rasterize_pdf(path, page, box_w, box_h, fit_mode)
     if is_svg(path):
         if box_w <= 0 or box_h <= 0:
             box_w = box_h = 1000  # tamanho de cortesia para inspeção/miniatura
         else:
             iw, ih = svg_intrinsic_size(path)
-            box_w, box_h = vector_render_box(iw, ih, box_w, box_h, auto_rotate)
+            box_w, box_h = vector_render_box(iw, ih, box_w, box_h, auto_rotate, rotation)
         return rasterize_svg(path, box_w, box_h, fit_mode)
     return Image.open(path).convert("RGBA")
 
@@ -784,6 +808,7 @@ class ImageEntry:
         self.page_index = page_index      # só PDF: qual página este item representa
         self.page_count = page_count
         self.quantity = 1
+        self.rotation = 0                 # 0 = Auto-Rotate; 90/180/270 horário, exato
         self.src_size: Optional[Tuple[int, int]] = None   # px da fonte (None p/ SVG)
         self.pil_thumb: Optional[Image.Image] = None
         self._load_thumb()
@@ -797,7 +822,7 @@ class ImageEntry:
 
     @property
     def ref(self) -> SourceRef:
-        return SourceRef(self.path, self.page_index)
+        return SourceRef(self.path, self.page_index, self.rotation)
 
     def _load_thumb(self):
         try:
@@ -1353,7 +1378,8 @@ class ImpositionEngine:
                     continue
                 try:
                     r = pdf_inner_ratio(e.path, e.page_index, cw, ch,
-                                        self.cfg.auto_rotate, self.cfg.fit_mode)
+                                        self.cfg.auto_rotate, self.cfg.fit_mode,
+                                        e.rotation)
                 except Exception:
                     continue                  # PDF ilegível nunca derruba a guarda
                 if r is not None and (worst_ratio is None or r < worst_ratio):
@@ -1365,11 +1391,14 @@ class ImpositionEngine:
             size = e.real_size()
             if not size:
                 continue
+            # Rotação manual é exata: só a orientação girada entra. Em 0°, o
             # Auto-Rotate pode girar a imagem; considera a orientação mais favorável.
-            ratios = [min(size[0] / cw, size[1] / ch)]
-            if self.cfg.auto_rotate:
-                ratios.append(min(size[1] / cw, size[0] / ch))
-            r = max(ratios)
+            straight = min(size[0] / cw, size[1] / ch)
+            turned   = min(size[1] / cw, size[0] / ch)
+            if e.rotation:
+                r = turned if e.rotation in (90, 270) else straight
+            else:
+                r = max(straight, turned) if self.cfg.auto_rotate else straight
             if worst_ratio is None or r < worst_ratio:
                 worst_ratio, worst_name = r, e.filename
 
@@ -1393,14 +1422,17 @@ class ImpositionEngine:
             return 255, 255, 255
 
     def _place_image(self, img: Image.Image, cw: int, ch: int,
-                     bg: Tuple[int, int, int]) -> Image.Image:
+                     bg: Tuple[int, int, int], rotation: int = 0) -> Image.Image:
         cfg = self.cfg
         iw, ih = img.size
 
-        if cfg.auto_rotate and iw > 0 and ih > 0:
-            if (cw >= ch) != (iw >= ih):
-                img = img.rotate(90, expand=True)
-                iw, ih = img.size
+        turn = effective_rotation(iw, ih, cw, ch, cfg.auto_rotate, rotation)
+        if turn:
+            # Pillow gira ANTI-horário: o manual (horário) entra negativo. O
+            # giro do Auto-Rotate (manual 0) segue `rotate(90)` — a saída de
+            # quem não usa o botão não muda nem 1 px.
+            img = img.rotate(90 if not rotation else -turn, expand=True)
+            iw, ih = img.size
 
         cell = Image.new("RGB", (cw, ch), bg)
 
@@ -1608,15 +1640,18 @@ class ImpositionEngine:
                     bw, bh = cw + 2 * bp_full, ch + 2 * bp_full
                     img  = open_source(src.path, bw, bh, page=src.page,
                                        auto_rotate=cfg.auto_rotate,
-                                       fit_mode=cfg.fit_mode)
-                    big  = self._place_image(img, bw, bh, bg)
+                                       fit_mode=cfg.fit_mode,
+                                       rotation=src.rotation)
+                    big  = self._place_image(img, bw, bh, bg, src.rotation)
                     cell = big.crop((bp_full - l, bp_full - t,
                                      bp_full + cw + r, bp_full + ch + b))
                 else:
                     img  = open_source(src.path, cw, ch, page=src.page,
                                        auto_rotate=cfg.auto_rotate,
-                                       fit_mode=cfg.fit_mode)
-                    cell = self._mirror_extend(self._place_image(img, cw, ch, bg),
+                                       fit_mode=cfg.fit_mode,
+                                       rotation=src.rotation)
+                    cell = self._mirror_extend(self._place_image(img, cw, ch, bg,
+                                                                 src.rotation),
                                                l, t, r, b)
             except Exception:
                 l = t = 0
@@ -1840,6 +1875,35 @@ def move_item(items: list, src: int, dst: int) -> list:
     return items
 
 
+def fill_last_sheet(quantities: List[int], nup: int) -> List[int]:
+    """Soma as cópias que faltam para fechar a última folha, uma por item a partir do primeiro.
+
+    Dá quantas voltas na lista forem precisas; folha já cheia ou lista vazia
+    devolvem as quantidades como vieram.
+    """
+    out = list(quantities)
+    if not out or nup <= 0:
+        return out
+    missing = (-sum(out)) % nup
+    for i in range(missing):
+        out[i % len(out)] += 1
+    return out
+
+
+def fill_n_sheets(n_items: int, nup: int, n_sheets: int) -> Optional[List[int]]:
+    """Quantidades iguais para encher exatamente `n_sheets` folhas; None se não couber.
+
+    Quando a divisão não é exata, os primeiros itens recebem uma cópia a mais.
+    """
+    if n_items <= 0 or nup <= 0 or n_sheets <= 0:
+        return None
+    total = n_sheets * nup
+    if n_items > total:
+        return None
+    base, extra = divmod(total, n_items)
+    return [base + 1] * extra + [base] * (n_items - extra)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # WIDGET: MINIATURA DA GRADE
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1893,7 +1957,8 @@ class ImageRow(ctk.CTkFrame):
 
     def __init__(self, master, entry: ImageEntry, idx: int,
                  on_remove, on_change, on_move_up, on_move_down,
-                 on_drag_start=None, on_drag_move=None, on_drag_end=None, **kw):
+                 on_drag_start=None, on_drag_move=None, on_drag_end=None,
+                 on_rotate=None, **kw):
         super().__init__(master, fg_color=("gray85", "#2a2a3a"), corner_radius=6, **kw)
         self.entry        = entry
         self.idx          = idx
@@ -1904,6 +1969,7 @@ class ImageRow(ctk.CTkFrame):
         self.on_drag_start = on_drag_start
         self.on_drag_move  = on_drag_move
         self.on_drag_end   = on_drag_end
+        self.on_rotate     = on_rotate
         self._build()
 
     def _build(self):
@@ -1925,8 +1991,11 @@ class ImageRow(ctk.CTkFrame):
         self.tk_img = None
         if self.entry.pil_thumb:
             # CTkImage, não PhotoImage: só ele reescala em telas 125%/150%.
-            self.tk_img = ctk.CTkImage(light_image=self.entry.pil_thumb,
-                                       dark_image=self.entry.pil_thumb,
+            # Gira a CÓPIA exibida; o cache de miniatura guarda a original.
+            thumb = self.entry.pil_thumb
+            if self.entry.rotation:
+                thumb = thumb.rotate(-self.entry.rotation, expand=True)
+            self.tk_img = ctk.CTkImage(light_image=thumb, dark_image=thumb,
                                        size=(THUMB_W, THUMB_H))
             lbl_img = ctk.CTkLabel(self, image=self.tk_img, text="")
         else:
@@ -1939,6 +2008,8 @@ class ImageRow(ctk.CTkFrame):
         # O sufixo da página fica fora do corte: é ele que distingue os itens.
         name += self.entry.page_label
         tag = "  [SVG]" if is_svg(self.entry.path) else ""
+        if self.entry.rotation:
+            tag += f"  · {self.entry.rotation}°"
         ctk.CTkLabel(self, text=name + tag, anchor="w",
                      font=ctk.CTkFont(size=11)).grid(row=0, column=2,
                                                      sticky="w", padx=2)
@@ -1965,6 +2036,10 @@ class ImageRow(ctk.CTkFrame):
                       command=lambda: self.on_move_up(self.idx)).pack(pady=(0, 2))
         ctk.CTkButton(btns, text="▼", width=26, height=22,
                       command=lambda: self.on_move_down(self.idx)).pack(pady=(0, 2))
+        self._rot_btn = ctk.CTkButton(
+            btns, text="⟳", width=26, height=22,
+            command=lambda: self.on_rotate and self.on_rotate(self.idx))
+        self._rot_btn.pack(pady=(0, 2))
         ctk.CTkButton(btns, text="✕", width=26, height=22,
                       fg_color="#993333", hover_color="#cc4444",
                       command=lambda: self.on_remove(self.idx)).pack()
@@ -2023,7 +2098,16 @@ class ImageListPanel(ctk.CTkFrame):
         ctk.CTkButton(tb2, text="+ Arquivos", width=96,
                       command=self._add_files).pack(side="left", padx=(0, 4))
         ctk.CTkButton(tb2, text="+ Pasta", width=80,
-                      command=self._add_folder).pack(side="left")
+                      command=self._add_folder).pack(side="left", padx=(0, 4))
+        # Menu do tk puro: o CTk não tem menu suspenso que abra sob o botão.
+        self._fill_menu = tk.Menu(self, tearoff=0)
+        self._fill_menu.add_command(label="Completar a última folha",
+                                    command=self._fill_complete)
+        self._fill_menu.add_command(label="Exatamente N folhas…",
+                                    command=self._fill_exact)
+        self._fill_btn = ctk.CTkButton(tb2, text="Preencher ▾", width=96,
+                                       command=self._show_fill_menu)
+        self._fill_btn.pack(side="left")
 
         self.scroll = ctk.CTkScrollableFrame(self, label_text="")
         self.scroll.grid(row=2, column=0, sticky="nsew", padx=4)
@@ -2114,6 +2198,67 @@ class ImageListPanel(ctk.CTkFrame):
             self._refresh_rows()
             self.on_change()
 
+    def _rotate(self, idx: int):
+        """Gira o item 90° no sentido horário: 0 → 90 → 180 → 270 → 0."""
+        if 0 <= idx < len(self.entries):
+            e = self.entries[idx]
+            e.rotation = (e.rotation + 90) % 360
+            self._refresh_rows()
+            self.on_change()
+
+    # ── Preencher folhas (mexe nas quantidades, à vista) ─────────────────────
+
+    def _show_fill_menu(self):
+        x = self._fill_btn.winfo_rootx()
+        y = self._fill_btn.winfo_rooty() + self._fill_btn.winfo_height()
+        try:
+            self._fill_menu.tk_popup(x, y)
+        finally:
+            self._fill_menu.grab_release()
+
+    def _apply_quantities(self, quantities: List[int]):
+        for e, q in zip(self.entries, quantities):
+            e.quantity = q
+        self._refresh_rows()
+        self.on_change()
+
+    def _fill_complete(self):
+        if not self.entries:
+            messagebox.showinfo("Preencher folhas", "A lista está vazia.")
+            return
+        qtys = [e.quantity for e in self.entries]
+        new = fill_last_sheet(qtys, self.cfg.nup())
+        if new == qtys:
+            messagebox.showinfo("Preencher folhas", "A última folha já está cheia.")
+            return
+        self._apply_quantities(new)
+
+    def _fill_exact(self):
+        if not self.entries:
+            messagebox.showinfo("Preencher folhas", "A lista está vazia.")
+            return
+        nup = self.cfg.nup()
+        n = simpledialog.askinteger(
+            "Preencher folhas", f"Quantas folhas? ({nup} por folha)",
+            parent=self, minvalue=1, maxvalue=999)
+        if n is None:
+            return
+        items = len(self.entries)
+        total = n * nup
+        new = fill_n_sheets(items, nup, n)
+        if new is None:
+            messagebox.showinfo(
+                "Preencher folhas",
+                f"Em {n} folha(s) de {nup} cabem {total} cópias, "
+                f"e a lista tem {items} imagens.")
+            return
+        if not messagebox.askyesno(
+                "Preencher folhas",
+                f"Isto troca as quantidades: {items} imagens em {n} folha(s) "
+                f"de {nup} = {total} cópias. Continuar?"):
+            return
+        self._apply_quantities(new)
+
     # ── Retorno visual do soltar e reordenação pela alça ─────────────────────
 
     def _info_text(self) -> str:
@@ -2194,7 +2339,7 @@ class ImageListPanel(ctk.CTkFrame):
                            on_remove=self._remove, on_change=self.on_change,
                            on_move_up=self._move_up, on_move_down=self._move_down,
                            on_drag_start=self._drag_start, on_drag_move=self._drag_move,
-                           on_drag_end=self._drag_end)
+                           on_drag_end=self._drag_end, on_rotate=self._rotate)
             row.grid(row=i, column=0, sticky="ew", padx=2, pady=2)
             self._rows.append(row)
 

@@ -57,12 +57,6 @@ O teto de 12×12 impede o extremo, mas 10×10 num A4 dá células de ~20 mm: tec
 ### 2026-06-15 — Entrada vetorial → imposição vetorial *(grande)*
 Posicionar PDFs vetorialmente (pypdf/reportlab) em vez de rasterizar: qualidade perfeita, arquivos minúsculos, marcas sem peso. Mudança de arquitetura. **Portão da F4 decidido em 06/11: vai para a F5 (DEC-015).** Medido: nitidez do texto melhora de forma visível na tela; o arquivo não fica menor para o conteúdo do dono (bitmap embutido). **Volta antes** se uma impressão em gráfica de ponta mostrar o texto raster mole.
 
-### 2026-06-15 — Rotação manual por imagem
-Toggle 90° por item, além do Auto-Rotate global. **F5.**
-
-### 2026-06-15 — Preenchimento automático para N folhas
-"Repetir até encher a última folha" ou "preencher exatamente X folhas". Acelera tiragens. **F5.**
-
 ### 2026-06-15 — Empacotar como .exe (PyInstaller)
 Executável Windows para quem não tem Python. **F5, 1.10.0, depois da moldura** (10/11: hoje só o dono usa). Formato: PyInstaller `--onedir` (o CustomTkinter não empacota em arquivo único) com o hook do `tkinterdnd2`, publicado no GitHub Releases por GitHub Actions a cada tag — zip versionado, soma SHA-256 e notas do CHANGELOG. Sem assinatura de código, o Windows mostra o SmartScreen na primeira execução; assinar custa um certificado anual e fica para quando houver usuário de fora.
 
@@ -107,6 +101,8 @@ Executável Windows para quem não tem Python. **F5, 1.10.0, depois da moldura**
 
 ## ✅ Concluídas
 > Ideia que virou realidade. Mantida aqui para histórico (com referência à versão/decisão).
+- **Rotação manual por imagem** *(assistente, 2026-06-15)* — implementada na 1.8.0 (F5, etapa 2): botão `⟳` por item; 0° segue o Auto-Rotate, 90/180/270° são exatos.
+- **Preenchimento automático para N folhas** *(assistente, 2026-06-15)* — implementado na 1.8.0: `Preencher ▾` com «Completar a última folha» e «Exatamente N folhas…», mexendo nas quantidades à vista.
 - **Drag-and-drop de arquivos na janela** *(assistente, 2026-06-15; pedido do dono em 07/11)* — implementado na 1.7.0 (F5, etapa 1): soltar arquivos e pastas em qualquer ponto da janela, via `tkinterdnd2` opcional (DEC-016).
 - **Reordenar a lista arrastando** *(assistente, 2026-06-15)* — implementado na 1.7.0: alça `≡` em cada linha, Tk puro; ▲ ▼ continuam.
 - **Aviso de sangria externa limitada pela margem** *(assistente, 2026-11-07)* — implementado na 1.7.0: aviso âmbar quando a margem externa é maior que 0 e menor que a sangria.

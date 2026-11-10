@@ -33,7 +33,7 @@ if "tkinter" not in sys.modules:
                  "PanedWindow", "Frame"):
         setattr(tk_stub, name, type(name, (), {}))
     sys.modules["tkinter"] = tk_stub
-    for sub in ("filedialog", "messagebox", "colorchooser"):
+    for sub in ("filedialog", "messagebox", "colorchooser", "simpledialog"):
         sys.modules[f"tkinter.{sub}"] = types.ModuleType(sub)
         setattr(tk_stub, sub, sys.modules[f"tkinter.{sub}"])
 
@@ -1040,7 +1040,7 @@ class MenuAndDialogTests(unittest.TestCase):
         self.assertLessEqual(pi.ConfigPanel.BOTTOM_H, 84)
 
     def test_versao(self):
-        self.assertEqual(pi.VERSION, "1.7.0")
+        self.assertEqual(pi.VERSION, "1.8.0")
 
 
 class StartupErrorTests(unittest.TestCase):
@@ -1131,7 +1131,7 @@ class SecondDestNoticeTests(unittest.TestCase):
             self.assertEqual(pi.second_dest_notice(self.cfg)[2], "warn")
 
     def test_encurta_no_meio_passando_do_limite(self):
-        longo = "C:\\" + "a" * 40 + "\\" + "b" * 40 + "\pasta_final"
+        longo = "C:\\" + "a" * 40 + "\\" + "b" * 40 + "\\pasta_final"
         curto = pi.shorten_middle(longo)
         self.assertEqual(len(curto), pi.DEST_NOTICE_MAX)
         self.assertIn("…", curto)
@@ -2099,6 +2099,188 @@ class SemTkinterdnd2Tests(unittest.TestCase):
     def test_janela_tem_o_setup_do_dnd(self):
         # O recurso só liga depois do _require (capacidade provada, FIX-002).
         self.assertIn("_setup_dnd", pi.PrintImposerApp.__dict__)
+
+
+class RotationTests(unittest.TestCase):
+    """F5 etapa 2 (wo0013): rotação por item. 0° segue o Auto-Rotate; o resto é exato."""
+
+    RED, BLUE = (255, 0, 0), (0, 0, 255)
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def _cfg(self, cw=2, ch=1, auto=False, **kw):
+        """Folha = uma célula de cw×ch px: sem margem, sem espaçamento, 1×1."""
+        cfg = pi.LayoutConfig()
+        cfg.cols = cfg.rows = 1
+        cfg.dpi = 72
+        cfg.paper_key = "Custom"
+        cfg.paper_w_mm = cw * 25.4 / 72
+        cfg.paper_h_mm = ch * 25.4 / 72
+        cfg.margin_outer_mm = cfg.margin_between_x_mm = cfg.margin_between_y_mm = 0.0
+        cfg.fit_mode = "stretch"
+        cfg.cut_guide = "none"
+        cfg.bleed_mm = 0.0
+        cfg.auto_rotate = auto
+        for k, v in kw.items():
+            setattr(cfg, k, v)
+        return cfg
+
+    def _red_blue(self):
+        """2×1: pixel esquerdo vermelho, direito azul."""
+        img = Image.new("RGB", (2, 1))
+        img.putpixel((0, 0), self.RED)
+        img.putpixel((1, 0), self.BLUE)
+        path = self.tmp / "rb.png"
+        img.save(path)
+        return str(path)
+
+    def _place(self, cw, ch, auto, rotation):
+        eng = pi.ImpositionEngine([], self._cfg(cw, ch, auto))
+        src = Image.open(self._red_blue()).convert("RGBA")
+        return eng._place_image(src, cw, ch, (255, 255, 255), rotation)
+
+    # ── a decisão ──
+    def test_effective_rotation(self):
+        er = pi.effective_rotation
+        self.assertEqual(er(100, 200, 200, 100, True, 0), 90)     # retrato em célula paisagem
+        self.assertEqual(er(100, 200, 200, 100, False, 0), 0)
+        self.assertEqual(er(100, 200, 200, 100, True, 180), 180)  # manual vence
+        self.assertEqual(er(200, 100, 200, 100, True, 90), 90)    # orientação igual: exato mesmo assim
+        self.assertEqual(er(200, 100, 200, 100, True, 0), 0)
+
+    # ── caixa de render vetorial ──
+    def test_caixa_vetorial_com_rotacao_manual(self):
+        cw, ch = 200, 100
+        self.assertEqual(pi.vector_render_box(300, 100, cw, ch, True, 90), (ch, cw))
+        self.assertEqual(pi.vector_render_box(300, 100, cw, ch, True, 270), (ch, cw))
+        self.assertEqual(pi.vector_render_box(100, 300, cw, ch, True, 180), (cw, ch))
+        # manual 0 segue a regra de sempre
+        self.assertEqual(pi.vector_render_box(100, 300, cw, ch, True, 0), (ch, cw))
+        self.assertEqual(pi.vector_render_box(100, 300, cw, ch, False, 0), (cw, ch))
+        self.assertEqual(pi.vector_render_box(300, 100, cw, ch, True, 0), (cw, ch))
+
+    def test_open_source_vetorial_pede_caixa_girada(self):
+        calls = []
+
+        def fake_render(path, out_w, out_h):
+            calls.append((out_w, out_h))
+            return Image.new("RGBA", (out_w, out_h), (10, 10, 10, 255))
+
+        svg = self.tmp / "d.svg"
+        svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200"/>',
+                       encoding="utf-8")
+        with mock.patch.object(pi, "_svg_backend_render", fake_render):
+            pi.open_source(str(svg), 200, 100, auto_rotate=False, rotation=90)
+            pi.open_source(str(svg), 200, 100, auto_rotate=False, rotation=180)
+        # Arte 3:2 deitada. 90°: renderiza na caixa (ch, cw) = 100×200 (largura ≤ 100,
+        # senão iria deitada e seria ampliada depois do giro); 180°: na própria célula.
+        self.assertEqual(calls[0], (100, 67))
+        self.assertEqual(calls[1], (150, 100))
+
+    # ── raster, por pixel ──
+    def test_90_horario_poe_o_vermelho_em_cima(self):
+        out = self._place(1, 2, auto=False, rotation=90)
+        self.assertEqual(out.size, (1, 2))
+        self.assertEqual(out.getpixel((0, 0)), self.RED)
+        self.assertEqual(out.getpixel((0, 1)), self.BLUE)
+
+    def test_270_poe_o_vermelho_embaixo(self):
+        out = self._place(1, 2, auto=False, rotation=270)
+        self.assertEqual(out.getpixel((0, 0)), self.BLUE)
+        self.assertEqual(out.getpixel((0, 1)), self.RED)
+
+    def test_180_poe_o_vermelho_a_direita(self):
+        out = self._place(2, 1, auto=False, rotation=180)
+        self.assertEqual(out.getpixel((0, 0)), self.BLUE)
+        self.assertEqual(out.getpixel((1, 0)), self.RED)
+
+    def test_manual_zero_com_auto_rotate_e_identico_ao_de_antes(self):
+        """O giro do Auto-Rotate continua `rotate(90)`: nem 1 px de diferença."""
+        out = self._place(1, 2, auto=True, rotation=0)
+        antigo = Image.open(self._red_blue()).convert("RGBA").rotate(90, expand=True)
+        antigo = antigo.resize((1, 2), Image.LANCZOS).convert("RGB")
+        self.assertEqual(list(out.getdata()), list(antigo.getdata()))
+
+    def test_auto_rotate_nao_desfaz_o_manual(self):
+        """Orientação já igual à da célula + manual 90 + Auto-Rotate: gira mesmo assim."""
+        out = self._place(2, 2, auto=True, rotation=90)
+        self.assertEqual(out.size, (2, 2))
+        self.assertEqual(out.getpixel((0, 0)), self.RED)      # vermelho em cima
+        self.assertEqual(out.getpixel((0, 1)), self.BLUE)
+
+    def test_compose_page_usa_a_rotacao_da_entrada(self):
+        cfg = self._cfg(1, 2, auto=False)
+        e = pi.ImageEntry(self._red_blue())
+        e.rotation = 90
+        eng = pi.ImpositionEngine([e], cfg)
+        page = eng.compose_page(0, eng._expand())
+        self.assertEqual(page.getpixel((0, 0)), self.RED)
+        self.assertEqual(page.getpixel((0, 1)), self.BLUE)
+
+    # ── guarda de qualidade ──
+    def test_guarda_com_manual_90_so_conta_a_orientacao_girada(self):
+        # Célula 600×300 px; fonte 300×600. Auto-Rotate (0°) aceitaria a
+        # orientação girada (razão 1,0); manual 180 não gira: razão 0,5.
+        cfg = pi.LayoutConfig()
+        cfg.cols = cfg.rows = 1
+        cfg.dpi = 72
+        cfg.paper_key = "Custom"
+        cfg.paper_w_mm, cfg.paper_h_mm = 600 * 25.4 / 72, 300 * 25.4 / 72
+        cfg.margin_outer_mm = 0.0
+        cfg.auto_rotate = True
+        path = make_image(self.tmp / "g.png", 300, 600)
+
+        def ratio(rotation):
+            e = pi.ImageEntry(path)
+            e.rotation = rotation
+            return pi.ImpositionEngine([e], cfg).quality_report()["ratio"]
+
+        self.assertAlmostEqual(ratio(0), 1.0, places=2)
+        self.assertAlmostEqual(ratio(90), 1.0, places=2)
+        self.assertAlmostEqual(ratio(180), 0.5, places=2)
+
+    # ── onde a rotação mora ──
+    def test_source_ref_continua_valido_e_a_entrada_leva_a_rotacao(self):
+        self.assertEqual(pi.SourceRef("a.png"), ("a.png", 0, 0))
+        self.assertEqual(pi.SourceRef("a.pdf", 3), ("a.pdf", 3, 0))
+        e = pi.ImageEntry(make_image(self.tmp / "r.png", 20, 10))
+        e.rotation = 270
+        self.assertEqual(e.ref.rotation, 270)
+
+    def test_snapshot_preserva_a_rotacao(self):
+        e = pi.ImageEntry(make_image(self.tmp / "s.png", 20, 10))
+        e.rotation = 180
+        snap, _ = pi.snapshot_for_generation([e], pi.LayoutConfig())
+        self.assertEqual(snap[0].rotation, 180)
+        self.assertEqual(snap[0].ref.rotation, 180)
+
+
+class FillSheetsTests(unittest.TestCase):
+    """F5 etapa 2 (wo0013): funções puras do «Preencher»."""
+
+    def test_completar_a_ultima_folha(self):
+        self.assertEqual(pi.fill_last_sheet([1] * 7, 4), [2, 1, 1, 1, 1, 1, 1])
+        self.assertEqual(pi.fill_last_sheet([3, 2], 9), [5, 4])
+
+    def test_ja_cheia_ou_vazia_nao_muda(self):
+        self.assertEqual(pi.fill_last_sheet([2, 2], 4), [2, 2])
+        self.assertEqual(pi.fill_last_sheet([], 4), [])
+
+    def test_completar_nao_muta_a_entrada(self):
+        q = [1, 1, 1]
+        pi.fill_last_sheet(q, 4)
+        self.assertEqual(q, [1, 1, 1])
+
+    def test_exatamente_n_folhas(self):
+        self.assertEqual(pi.fill_n_sheets(3, 4, 2), [3, 3, 2])
+        self.assertEqual(pi.fill_n_sheets(4, 4, 1), [1, 1, 1, 1])
+        self.assertIsNone(pi.fill_n_sheets(5, 4, 1))
+
+    def test_exatamente_n_soma_n_vezes_nup(self):
+        for items, nup, n in ((3, 4, 2), (7, 4, 5), (2, 9, 3), (1, 12, 1)):
+            with self.subTest(items=items, nup=nup, n=n):
+                self.assertEqual(sum(pi.fill_n_sheets(items, nup, n)), n * nup)
 
 
 class LauncherTests(unittest.TestCase):

@@ -42,7 +42,7 @@ reescreve), o IDEAS nunca perde nada. Curadoria que reescreve um doc inteiro é 
 ## Build / validação
 ```bash
 python print_imposer.py          # abre a GUI
-python tests/test_engine.py      # suite headless (~2s) — rode SEMPRE antes de commitar codigo
+python tests/test_engine.py      # suite headless (~15s) — rode SEMPRE antes de commitar codigo
 ```
 - Não há build. Mudança só de doc (`meta/`) NÃO precisa de teste; a rede é o `git diff`.
 - **Suíte verde não prova que o app abre** (FIX-003). Mudança de interface → `/smoke`.

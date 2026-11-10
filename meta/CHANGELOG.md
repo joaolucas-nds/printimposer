@@ -8,6 +8,24 @@
 
 ---
 
+## [1.8.0] — 2026-11-10
+Rotação por item e preencher folhas (wo0013, F5 etapa 2). A conferência na tela está com o dono.
+
+### Adicionado
+- **Rotação por item**: botão `⟳` entre `▼` e `✕` gira 90° no sentido horário a cada clique (0 → 90 → 180 → 270 → 0). **0° segue o Auto-Rotate; 90/180/270° são exatos** e o Auto-Rotate não age sobre eles. A linha mostra `· 90°` e a miniatura aparece girada. Vale para raster, PDF e SVG: a fonte vetorial é rasterizada já na orientação final (caixa `(ch, cw)` em 90°/270°), sem ampliar depois. A guarda de qualidade mede a orientação efetiva do item.
+- **Preencher ▾** na barra da lista: `Completar a última folha` (soma as cópias que faltam, uma por item, a partir do primeiro) e `Exatamente N folhas…` (troca as quantidades por um total de N × cópias por folha, com confirmação). Mexe nas quantidades à vista; continuam editáveis.
+- `effective_rotation`, `fill_last_sheet` e `fill_n_sheets`: funções puras, sem Tk. `SourceRef` ganhou o campo `rotation` (padrão 0).
+- 17 testes headless (201 → 218).
+
+### Corrigido
+- `SyntaxWarning` de escape inválido (`"\p"`) em `tests/test_engine.py`.
+- Tempo da suíte no `CLAUDE.md` (`~2s` → `~15s`, medido 13–18 s).
+
+### Modificado
+- `VERSION` para 1.8.0; README para a 1.8.
+
+---
+
 ## [1.7.0] — 2026-11-10
 Arrastar e soltar, reordenar arrastando e aviso de sangria externa (wo0012, F5 etapa 1). A conferência na tela e com o Explorer está com o dono.
 

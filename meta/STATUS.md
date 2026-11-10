@@ -7,16 +7,16 @@
 ---
 
 ## Versão Atual
-**1.7.0** — 2026-11-10 — Arrastar e soltar arquivos e pastas na janela (`tkinterdnd2` opcional, DEC-016), reordenar a lista arrastando pela alça `≡` e aviso de sangria externa limitada pela margem. Suíte verde (201 testes; 5 skips de SVG). Roteiro do dono feito em 10/11: tudo certo (inclusive o soltar do Explorer sobre o preview).
+**1.8.0** — 2026-11-10 — Rotação por item (`⟳`: 0° segue o Auto-Rotate; 90/180/270° exatos) e `Preencher ▾` (completar a última folha; exatamente N folhas). Suíte verde (218 testes; 5 skips de SVG). **Aguardando o roteiro do dono** (a rotação e o preencher na tela, só ele confere).
 
 ## 🎯 Foco atual
-**Produto:** F5 em curso — ordem decidida em 10/11 (escada C, `meta/analises/261109-ANALISE-ordem-f5.md`). 1.7.0 (arrastar) conferida pelo dono em 10/11. Agora: **1.8.0 — tiragem** (wo0013): rotação por item e preencher folhas.
+**Produto:** F5 em curso — ordem decidida em 10/11 (escada C, `meta/analises/261109-ANALISE-ordem-f5.md`). 1.7.0 (arrastar) conferida pelo dono em 10/11; 1.8.0 (tiragem: rotação por item e preencher folhas) entregue e aguardando o roteiro do dono.
 **Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013). WO que muda a interface traz o roteiro do dono **no chat** e a linha `/apply-wo` em bloco cercado.
 
-## ✅ Funcionando *(suíte headless verde; roteiro do dono da 1.7.0 feito em 10/11, tudo certo)*
+## ✅ Funcionando *(suíte headless verde; a 1.8.0 aguarda o roteiro do dono)*
 - Grade livre `cols × rows` até 12×12, com atalhos e miniatura do grid.
-- Lista de imagens com miniatura, quantidade, reordenação por ▲ ▼ ou arrastando pela alça `≡`; "+ Arquivos" e "+ Pasta", ou soltar arquivos e pastas em qualquer ponto da janela (com `tkinterdnd2`; sem ele o cabeçalho diz `Arrastar: indisponível`).
-- Ajuste fit / fill / stretch + Auto-Rotate.
+- Lista de imagens com miniatura, quantidade, reordenação por ▲ ▼ ou arrastando pela alça `≡`; rotação por item com `⟳`; `Preencher ▾` (completar a última folha ou exatamente N folhas); "+ Arquivos" e "+ Pasta", ou soltar arquivos e pastas em qualquer ponto da janela (com `tkinterdnd2`; sem ele o cabeçalho diz `Arrastar: indisponível`).
+- Ajuste fit / fill / stretch + Auto-Rotate; rotação manual por item (0° segue o Auto-Rotate; 90/180/270° exatos).
 - Papéis A3/A4/A5/A6/Letter/Legal/Tabloid/Custom; DPI 72–1200; margens e cor de fundo.
 - Seção «Corte e sangria»: guia de corte `Nenhuma` / `Linhas atravessando` (sólida/tracejada/pontilhada, com espessura, traço e cor) / `Marcas de canto` (comprimento, distância e espessura em pt; 4 mm, 3 mm, 0,25 pt); sangria 0–10 mm, `Estender a borda (espelhar)` ou `A arte já tem sangria`; avisos âmbar/cinza (inclusive margem externa menor que a sangria) e confirmação antes de gerar. Geometria em mm numa função pura (`sheet_geometry`).
 - Guarda de qualidade (OK / atenção / perda visível) com confirmação antes de gerar.
@@ -34,13 +34,14 @@
 - Barra inferior mostra «Também grava em: …» com o segundo destino ligado (âmbar se inexistente ou temporário).
 
 ## 🔧 Em Progresso
-- 1.8.0 — tiragem (wo0013, Parte B).
+- (vazio)
 
 ## ❌ Quebrado / Com Problema
 - (nada conhecido.)
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
+- [ ] **Dono:** roteiro da 1.8.0 (no chat de 10/11 e no fim da wo0013) — em especial o `⟳` numa página de PDF e o `Preencher ▾`.
 - [ ] **Chat:** análise do portão da moldura (modelo das células, cortes e marcas em layout não-uniforme, DEC-003) — pode correr em paralelo à 1.8.0.
 - [ ] **Dono (opcional):** impressão de teste raster × vetorial numa **gráfica** de ponta (em casa, 06/11, a diferença só aparece de muito perto). Se o texto raster sair mole, reabre a vetorial (gatilho da DEC-015).
 - [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho», e a seção «Corte e sangria» com marcas de canto no preview (as capturas de 07/11 na pasta-pai servem).
@@ -54,3 +55,5 @@
 **2026-11-10 (Code)** — wo0012 aplicada: Parte A (docs, DEC-016) e Parte B (1.7.0, tag `v1.7.0`). Roteiro do dono pendente.
 
 **2026-11-10 (tarde)** — Dono fez o roteiro da 1.7.0: tudo certo. Chat marcou a 1.7.0 ✅ no ROADMAP e escreveu a spec e a wo0013 da 1.8.0 (tiragem).
+
+**2026-11-10 (Code)** — wo0013 aplicada: Parte A (docs) e Parte B (1.8.0, tag `v1.8.0`). Roteiro do dono pendente.

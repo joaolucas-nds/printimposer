@@ -42,6 +42,7 @@
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
 - [ ] **Dono:** roteiro da 1.9.0 (no chat e no fim de `meta/workorders/261110-wo0015-f5-moldura.md`).
+- [ ] **Chat:** decidir se o achado da linha preta de 1 px no modo `fill` (`_place_image`, `int(ih*scale)`; reproduzido na grade 1×1, 1086×1601 px, imagem 1500×1500 — relatório da wo0015, item 5) vira WO própria.
 - [ ] **Chat:** depois do roteiro da 1.9.0, a frente seguinte da F5: 1.10.0 (executável + GitHub Releases); antes, confirmar com o dono se o repositório é público.
 - [ ] **Dono (opcional):** impressão de teste raster × vetorial numa **gráfica** de ponta (em casa, 06/11, a diferença só aparece de muito perto). Se o texto raster sair mole, reabre a vetorial (gatilho da DEC-015).
 - [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho», e a seção «Corte e sangria» com marcas de canto no preview (as capturas de 07/11 na pasta-pai servem).

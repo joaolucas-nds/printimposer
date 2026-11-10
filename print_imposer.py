@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PrintImposer v1.6.0
+PrintImposer v1.7.0
 Ferramenta de Imposição de Páginas para Impressão em Massa
 
 Selecione imagens, configure o layout e gere PDFs/PNGs prontos para impressão.
@@ -56,6 +56,13 @@ Novidades da 1.6 (fase F4, etapa 4 — SPEC-F4-etapa4):
   - Seção «Linhas de corte» virou «Corte e sangria»; `cut_lines` virou
     `cut_guide` (config e presets antigos continuam abrindo)
   - Geometria de corte calculada em mm (`sheet_geometry`), separada do desenho
+
+Novidades da 1.7 (fase F5, etapa 1 — SPEC-F5-arrastar):
+  - Soltar arquivos e pastas em qualquer ponto da janela (`tkinterdnd2`,
+    opcional — DEC-016); passa pelo mesmo funil do «+ Arquivos»
+  - Reordenar a lista arrastando pela alça «≡» (Tk puro, sem dependência)
+  - Aviso âmbar quando a margem externa é menor que a sangria
+  - Cabeçalho e «Sobre» mostram o estado do arrastar
 """
 
 import os
@@ -167,6 +174,25 @@ PDF_OK: bool = PDF_BACKEND is not None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# SUPORTE OPCIONAL A ARRASTAR E SOLTAR (DEC-016)
+# ══════════════════════════════════════════════════════════════════════════════
+# `tkinterdnd2` embrulha o tkDnD. Aqui só dá para saber se o PACOTE importa; a
+# capacidade de verdade (FIX-002) só é provada com a janela criada, quando
+# `TkinterDnD._require(self)` devolve uma versão — ver PrintImposerApp.__init__.
+# Sem o pacote a janela herda só de `ctk.CTk` e o app é igual à 1.6.0.
+
+try:
+    from tkinterdnd2 import TkinterDnD, DND_FILES  # type: ignore
+    _DnDBase = TkinterDnD.DnDWrapper
+    DND_PKG_OK: bool = True
+except Exception:
+    TkinterDnD = None
+    DND_FILES = "DND_Files"
+    _DnDBase = object
+    DND_PKG_OK = False
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # SUPORTE OPCIONAL A AVIF / HEIC
 # ══════════════════════════════════════════════════════════════════════════════
 # AVIF: o Pillow 12 lê sozinho, mas só se foi compilado com o codec — sondamos
@@ -208,7 +234,7 @@ HEIF_OK: bool = _probe_heif()
 # CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION  = "1.6.0"
+VERSION  = "1.7.0"
 APP_NAME = "PrintImposer"
 MM_TO_INCH = 1.0 / 25.4
 
@@ -1044,6 +1070,12 @@ def sheet_geometry(cfg: "LayoutConfig") -> SheetGeometry:
                 warnings.append(("warn",
                                  f"Espaçamento entre {nome} menor que 2× a sangria: "
                                  f"entre as {nome} coube {_fmt_mm(gap / 2)} mm."))
+        # Margem 0 não avisa: a célula encosta no papel e não há corte externo a proteger.
+        if mo > 1e-9 and mo + 1e-9 < bleed:
+            warnings.append(("warn",
+                             f"A margem externa ({_fmt_mm(mo)} mm) é menor que a sangria "
+                             f"({_fmt_mm(bleed)} mm): na borda da folha, a sangria vai "
+                             f"só até {_fmt_mm(mo)} mm."))
         if cfg.cut_guide == "lines":
             warnings.append(("info", "Com sangria, use marcas de canto: "
                                      "as linhas riscam a sangria."))
@@ -1763,6 +1795,51 @@ def plan_ingest(paths, confirm_many=None) -> Tuple[List[Tuple[str, int, int]],
     return items, skipped
 
 
+def expand_dropped(paths) -> Tuple[List[str], List[Tuple[str, str]]]:
+    """Transforma o que foi solto na janela em (arquivos, [(pulado, motivo)]).
+
+    Pasta entra como no «+ Pasta»: só o primeiro nível, sem subpastas, e no lugar
+    dela. Tudo é ordenado pelo nome, sem diferenciar maiúscula. Formato não
+    suportado vai para os pulados (não some em silêncio); caminho inexistente é
+    ignorado. Sem Tk: o `event.data` já chega aqui como lista.
+    """
+    def by_name(p) -> str:
+        return os.path.basename(str(p)).lower()
+
+    files: List[str] = []
+    skipped: List[Tuple[str, str]] = []
+
+    def take(p: Path):
+        if p.suffix.lower() in SUPPORTED_EXT:
+            files.append(str(p))
+        else:
+            skipped.append((p.name, "formato não suportado"))
+
+    for raw in sorted((str(x) for x in paths), key=by_name):
+        p = Path(raw)
+        try:
+            if p.is_dir():
+                for child in sorted((c for c in p.iterdir() if c.is_file()),
+                                    key=by_name):
+                    take(child)
+            elif p.is_file():
+                take(p)
+        except OSError:
+            continue    # pasta sem permissão ou que sumiu no meio do caminho
+    return files, skipped
+
+
+def move_item(items: list, src: int, dst: int) -> list:
+    """Leva o item de `src` para a posição `dst` (no lugar) e devolve a lista.
+
+    Índice fora da faixa, ou origem igual ao destino, não muda nada.
+    """
+    n = len(items)
+    if 0 <= src < n and 0 <= dst < n and src != dst:
+        items.insert(dst, items.pop(src))
+    return items
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # WIDGET: MINIATURA DA GRADE
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1812,10 +1889,11 @@ class GridPreview(tk.Canvas):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class ImageRow(ctk.CTkFrame):
-    """Uma linha na lista: miniatura, nome, quantidade e botões de ação."""
+    """Uma linha na lista: alça, miniatura, nome, quantidade e botões de ação."""
 
     def __init__(self, master, entry: ImageEntry, idx: int,
-                 on_remove, on_change, on_move_up, on_move_down, **kw):
+                 on_remove, on_change, on_move_up, on_move_down,
+                 on_drag_start=None, on_drag_move=None, on_drag_end=None, **kw):
         super().__init__(master, fg_color=("gray85", "#2a2a3a"), corner_radius=6, **kw)
         self.entry        = entry
         self.idx          = idx
@@ -1823,10 +1901,26 @@ class ImageRow(ctk.CTkFrame):
         self.on_change    = on_change
         self.on_move_up   = on_move_up
         self.on_move_down = on_move_down
+        self.on_drag_start = on_drag_start
+        self.on_drag_move  = on_drag_move
+        self.on_drag_end   = on_drag_end
         self._build()
 
     def _build(self):
         self.columnconfigure(2, weight=1)
+
+        # Alça de arraste: só ela inicia o arraste, senão o clique no campo «Qtd»
+        # viraria arraste. O índice (não o widget) vai no callback: a lista
+        # recria as linhas a cada mudança.
+        handle = ctk.CTkLabel(self, text="≡", width=16, cursor="fleur",
+                              font=ctk.CTkFont(size=16))
+        handle.grid(row=0, column=0, rowspan=2, padx=(4, 0))
+        handle.bind("<ButtonPress-1>",
+                    lambda e: self.on_drag_start and self.on_drag_start(self.idx))
+        handle.bind("<B1-Motion>",
+                    lambda e: self.on_drag_move and self.on_drag_move(e.x_root, e.y_root))
+        handle.bind("<ButtonRelease-1>",
+                    lambda e: self.on_drag_end and self.on_drag_end(e.x_root, e.y_root))
 
         self.tk_img = None
         if self.entry.pil_thumb:
@@ -1837,7 +1931,7 @@ class ImageRow(ctk.CTkFrame):
             lbl_img = ctk.CTkLabel(self, image=self.tk_img, text="")
         else:
             lbl_img = ctk.CTkLabel(self, text="?", font=ctk.CTkFont(size=22))
-        lbl_img.grid(row=0, column=0, rowspan=2, padx=(6, 4), pady=4)
+        lbl_img.grid(row=0, column=1, rowspan=2, padx=(4, 4), pady=4)
 
         name = self.entry.filename
         if len(name) > 28:
@@ -1900,12 +1994,17 @@ class ImageRow(ctk.CTkFrame):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class ImageListPanel(ctk.CTkFrame):
-    def __init__(self, master, cfg: LayoutConfig, on_change, **kw):
+    def __init__(self, master, cfg: LayoutConfig, on_change,
+                 drop_enabled: bool = False, **kw):
         super().__init__(master, **kw)
         self.cfg       = cfg
         self.on_change = on_change
+        self.drop_enabled = drop_enabled     # só muda o texto da lista vazia
         self.entries: List[ImageEntry] = []
         self._rows: List[ImageRow] = []
+        self._dropping = False               # arraste de arquivos passando pela janela
+        self._drag_src: Optional[int] = None  # índice da linha cuja alça foi apertada
+        self._drag_dst: Optional[int] = None  # índice da linha sob o ponteiro
         self._build()
 
     def _build(self):
@@ -1930,7 +2029,7 @@ class ImageListPanel(ctk.CTkFrame):
         self.scroll.grid(row=2, column=0, sticky="nsew", padx=4)
         self.scroll.columnconfigure(0, weight=1)
 
-        self.info_var = tk.StringVar(value="Nenhuma imagem selecionada")
+        self.info_var = tk.StringVar(value=self._info_text())
         ctk.CTkLabel(self, textvariable=self.info_var, font=ctk.CTkFont(size=10),
                      text_color=("gray50", "gray60")).grid(
             row=3, column=0, sticky="w", padx=10, pady=(2, 6))
@@ -1976,10 +2075,20 @@ class ImageListPanel(ctk.CTkFrame):
             return
         self._ingest(found)
 
-    def _ingest(self, paths):
+    def ingest_dropped(self, paths):
+        """Entrada do soltar na janela: mesmo funil do «+ Arquivos», sem tocar nas pastas lembradas."""
+        files, skipped = expand_dropped(paths)
+        if not files and not skipped:
+            messagebox.showinfo("Nada encontrado",
+                                "Nenhuma imagem suportada no que foi solto.")
+            return
+        self._ingest(files, pre_skipped=skipped)
+
+    def _ingest(self, paths, pre_skipped=()):
         items, skipped = plan_ingest(
             paths, confirm_many=lambda name, n: messagebox.askyesno(
                 "PDF grande", f"Adicionar as {n} páginas de {name}?"))
+        skipped = list(pre_skipped) + skipped
         for path, page, total in items:
             self.entries.append(ImageEntry(path, page, total))
         if items:
@@ -2005,6 +2114,64 @@ class ImageListPanel(ctk.CTkFrame):
             self._refresh_rows()
             self.on_change()
 
+    # ── Retorno visual do soltar e reordenação pela alça ─────────────────────
+
+    def _info_text(self) -> str:
+        if self._dropping:
+            return "Solte para adicionar à lista"
+        if self.entries:
+            total = sum(e.quantity for e in self.entries)
+            return f"{len(self.entries)} arquivo(s) · {total} cópias no total"
+        if self.drop_enabled:
+            return "Nenhuma imagem — arraste arquivos ou pastas para cá"
+        return "Nenhuma imagem selecionada"
+
+    def set_drop_highlight(self, on: bool):
+        """Acende a moldura da lista enquanto um arraste de arquivos passa pela janela."""
+        self._dropping = on
+        self.scroll.configure(border_width=2 if on else 0, border_color="#3b8ed0")
+        self.info_var.set(self._info_text())
+
+    def _row_at(self, x_root: int, y_root: int) -> Optional[int]:
+        """Índice da linha sob o ponteiro (sobe pelos pais até achar uma ImageRow)."""
+        try:
+            w = self.winfo_containing(x_root, y_root)
+        except Exception:
+            return None      # o Tk levanta KeyError em alguns popups
+        while w is not None:
+            if w in self._rows:
+                return w.idx
+            w = getattr(w, "master", None)
+        return None
+
+    def _mark_row(self, idx: Optional[int], on: bool):
+        if idx is not None and 0 <= idx < len(self._rows):
+            self._rows[idx].configure(border_width=2 if on else 0,
+                                      border_color="#3b8ed0")
+
+    def _drag_start(self, idx: int):
+        self._drag_src, self._drag_dst = idx, None
+
+    def _drag_move(self, x_root: int, y_root: int):
+        if self._drag_src is None:
+            return
+        dst = self._row_at(x_root, y_root)
+        if dst != self._drag_dst:
+            self._mark_row(self._drag_dst, False)
+            self._drag_dst = dst
+            self._mark_row(dst, True)
+
+    def _drag_end(self, x_root: int, y_root: int):
+        src, dst = self._drag_src, self._row_at(x_root, y_root)
+        self._mark_row(self._drag_dst, False)
+        self._drag_src = self._drag_dst = None
+        # Soltar fora da lista ou na própria linha não muda nada.
+        if src is None or dst is None or dst == src:
+            return
+        move_item(self.entries, src, dst)
+        self._refresh_rows()
+        self.on_change()
+
     def _move_up(self, idx: int):
         if idx > 0:
             self.entries[idx-1], self.entries[idx] = self.entries[idx], self.entries[idx-1]
@@ -2025,15 +2192,13 @@ class ImageListPanel(ctk.CTkFrame):
         for i, entry in enumerate(self.entries):
             row = ImageRow(self.scroll, entry, i,
                            on_remove=self._remove, on_change=self.on_change,
-                           on_move_up=self._move_up, on_move_down=self._move_down)
+                           on_move_up=self._move_up, on_move_down=self._move_down,
+                           on_drag_start=self._drag_start, on_drag_move=self._drag_move,
+                           on_drag_end=self._drag_end)
             row.grid(row=i, column=0, sticky="ew", padx=2, pady=2)
             self._rows.append(row)
 
-        if self.entries:
-            total = sum(e.quantity for e in self.entries)
-            self.info_var.set(f"{len(self.entries)} arquivo(s) · {total} cópias no total")
-        else:
-            self.info_var.set("Nenhuma imagem selecionada")
+        self.info_var.set(self._info_text())
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2871,10 +3036,11 @@ class PreviewPanel(ctk.CTkFrame):
 # APLICAÇÃO PRINCIPAL
 # ══════════════════════════════════════════════════════════════════════════════
 
-class PrintImposerApp(ctk.CTk):
+class PrintImposerApp(ctk.CTk, _DnDBase):
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} v{VERSION}")
+        self._dnd_ok = self._setup_dnd()
 
         self.cfg = LayoutConfig()
         self._load_persisted()
@@ -2887,6 +3053,48 @@ class PrintImposerApp(ctk.CTk):
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._on_change()
+
+    # ── Arrastar e soltar (DEC-016) ──────────────────────────────────────────
+
+    def _setup_dnd(self) -> bool:
+        """Liga o soltar na janela inteira; só devolve True com a capacidade PROVADA.
+
+        Importar o pacote não basta (FIX-002): o tkDnD precisa carregar no Tcl desta
+        janela, e o registro do alvo precisa passar. Qualquer falha desliga o recurso
+        e o app segue como na 1.6.0.
+        """
+        if not DND_PKG_OK:
+            return False
+        try:
+            if not TkinterDnD._require(self):
+                return False
+            self.drop_target_register(DND_FILES)
+            self.dnd_bind("<<DropEnter>>", self._on_drop_enter)
+            self.dnd_bind("<<DropLeave>>", self._on_drop_leave)
+            self.dnd_bind("<<Drop>>", self._on_drop)
+            return True
+        except Exception:
+            return False
+
+    def _on_drop_enter(self, event):
+        self.img_panel.set_drop_highlight(True)
+        return event.action
+
+    def _on_drop_leave(self, event):
+        self.img_panel.set_drop_highlight(False)
+        return event.action
+
+    def _on_drop(self, event):
+        self.img_panel.set_drop_highlight(False)
+        # `splitlist`, nunca `split()`: caminho com espaço chega entre chaves.
+        try:
+            paths = self.tk.splitlist(event.data)
+        except tk.TclError:
+            paths = ()
+        # Adiar: os diálogos da ingestão são modais e segurariam o Explorer preso
+        # dentro do callback do soltar.
+        self.after(10, lambda: self.img_panel.ingest_dropped(paths))
+        return event.action
 
     # ── Persistência ─────────────────────────────────────────────────────────
 
@@ -3018,7 +3226,8 @@ class PrintImposerApp(ctk.CTk):
             self._menu_buttons[title] = btn
         svg_note = f"SVG: {SVG_BACKEND}" if SVG_BACKEND else "SVG: indisponível"
         pdf_note = f"PDF: {PDF_BACKEND}" if PDF_BACKEND else "PDF: indisponível"
-        ctk.CTkLabel(header, text=f"v{VERSION}   ·   {svg_note}   ·   {pdf_note}",
+        dnd_note = "Arrastar: tkinterdnd2" if self._dnd_ok else "Arrastar: indisponível"
+        ctk.CTkLabel(header, text=f"v{VERSION}   ·   {svg_note}   ·   {pdf_note}   ·   {dnd_note}",
                      font=ctk.CTkFont(size=10),
                      text_color=("gray50", "gray50")).pack(side="right", padx=14)
 
@@ -3030,7 +3239,8 @@ class PrintImposerApp(ctk.CTk):
         # direto para o PanedWindow — sempre um tk.Frame neutro de permeio.
         list_outer = tk.Frame(self._pane, bg="#2a2a3a")
         list_outer.rowconfigure(0, weight=1); list_outer.columnconfigure(0, weight=1)
-        self.img_panel = ImageListPanel(list_outer, self.cfg, on_change=self._on_change)
+        self.img_panel = ImageListPanel(list_outer, self.cfg, on_change=self._on_change,
+                                        drop_enabled=self._dnd_ok)
         self.img_panel.grid(row=0, column=0, sticky="nsew")
         self._pane.add(list_outer, minsize=270)
 
@@ -3201,6 +3411,7 @@ class PrintImposerApp(ctk.CTk):
             f"Formatos extras: AVIF {'sim' if AVIF_OK else 'não'} · "
             f"HEIC {'sim' if HEIF_OK else 'não'} · "
             f"PDF {'sim' if PDF_OK else 'não'}\n"
+            f"Arrastar e soltar: {'sim' if self._dnd_ok else 'não'}\n"
             f"Configuração: {SettingsStore.SETTINGS}")
 
     def _show_shortcut_dialog(self):

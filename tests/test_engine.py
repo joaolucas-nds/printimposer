@@ -1040,7 +1040,7 @@ class MenuAndDialogTests(unittest.TestCase):
         self.assertLessEqual(pi.ConfigPanel.BOTTOM_H, 84)
 
     def test_versao(self):
-        self.assertEqual(pi.VERSION, "1.6.0")
+        self.assertEqual(pi.VERSION, "1.7.0")
 
 
 class StartupErrorTests(unittest.TestCase):
@@ -1976,6 +1976,129 @@ class IncludedBleedBoxTests(unittest.TestCase):
         eng.compose_page(0, eng._expand(), override_dpi=72)
         self.assertLessEqual(self.calls[-1][0], cw + 1)
         self.assertLessEqual(self.calls[-1][1], ch + 1)
+
+
+class ExpandDroppedTests(unittest.TestCase):
+    """Soltar na janela (SPEC-F5-arrastar): expansão e ordem, sem Tk."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.dir = self.root / "pasta com espaço"
+        self.dir.mkdir()
+        make_image(self.dir / "b.png", 20, 20)
+        make_image(self.dir / "A.jpg", 20, 20)
+        (self.dir / "nota.txt").write_text("x", encoding="utf-8")
+        (self.dir / "sub").mkdir()
+        make_image(self.dir / "sub" / "c.png", 20, 20)
+
+    def names(self, files):
+        return [os.path.basename(f) for f in files]
+
+    def test_pasta_primeiro_nivel_ordenada_sem_maiuscula(self):
+        files, skipped = pi.expand_dropped([str(self.dir)])
+        self.assertEqual(self.names(files), ["A.jpg", "b.png"])
+        self.assertEqual(skipped, [("nota.txt", "formato não suportado")])
+
+    def test_arquivos_soltos_sao_ordenados(self):
+        files, skipped = pi.expand_dropped([str(self.dir / "b.png"),
+                                            str(self.dir / "A.jpg")])
+        self.assertEqual(self.names(files), ["A.jpg", "b.png"])
+        self.assertEqual(skipped, [])
+
+    def test_caminho_inexistente_e_ignorado(self):
+        files, skipped = pi.expand_dropped([str(self.root / "nao-existe.png")])
+        self.assertEqual((files, skipped), ([], []))
+
+    def test_caminho_com_espaco_preservado(self):
+        files, _ = pi.expand_dropped([str(self.dir)])
+        self.assertTrue(all("pasta com espaço" in f for f in files))
+
+    def test_pasta_vazia_nao_devolve_nada(self):
+        vazia = self.root / "vazia"
+        vazia.mkdir()
+        self.assertEqual(pi.expand_dropped([str(vazia)]), ([], []))
+
+    def test_pasta_expandida_no_lugar_dela(self):
+        make_image(self.root / "z.png", 20, 20)
+        files, _ = pi.expand_dropped([str(self.root / "z.png"), str(self.dir)])
+        # «pasta com espaço» vem antes de «z.png» pelo nome.
+        self.assertEqual(self.names(files), ["A.jpg", "b.png", "z.png"])
+
+
+class MoveItemTests(unittest.TestCase):
+    def test_do_fim_para_o_topo(self):
+        self.assertEqual(pi.move_item(list("abcd"), 3, 0), list("dabc"))
+
+    def test_do_topo_para_o_fim(self):
+        self.assertEqual(pi.move_item(list("abcd"), 0, 3), list("bcda"))
+
+    def test_mesma_posicao_nao_muda(self):
+        self.assertEqual(pi.move_item(list("abcd"), 1, 1), list("abcd"))
+
+    def test_indice_fora_da_faixa_nao_muda(self):
+        for src, dst in ((-1, 2), (4, 0), (0, 4), (0, -1)):
+            self.assertEqual(pi.move_item(list("abcd"), src, dst), list("abcd"))
+
+    def test_muda_no_lugar(self):
+        lst = list("abc")
+        self.assertIs(pi.move_item(lst, 2, 0), lst)
+        self.assertEqual(lst, list("cab"))
+
+
+class OuterMarginBleedWarningTests(unittest.TestCase):
+    """Aviso âmbar quando 0 < margem externa < sangria (pendência da 1.6.0)."""
+
+    def warns(self, **kw):
+        return [t for lvl, t in pi.sheet_geometry(cut_cfg(**kw)).warnings
+                if t.startswith("A margem externa (")]
+
+    def test_margem_menor_que_sangria_avisa(self):
+        geo = pi.sheet_geometry(cut_cfg(margin_outer_mm=2.0, bleed_mm=3.0))
+        achados = [(lvl, t) for lvl, t in geo.warnings if "margem externa (" in t]
+        self.assertEqual(len(achados), 1)
+        lvl, texto = achados[0]
+        self.assertEqual(lvl, "warn")
+        self.assertIn("(2 mm)", texto)
+        self.assertIn("(3 mm)", texto)
+        self.assertIn("só até 2 mm", texto)
+
+    def test_margem_zero_nao_avisa(self):
+        self.assertEqual(self.warns(margin_outer_mm=0.0, bleed_mm=3.0), [])
+
+    def test_margem_maior_que_sangria_nao_avisa(self):
+        self.assertEqual(self.warns(margin_outer_mm=5.0, bleed_mm=3.0), [])
+
+    def test_margem_igual_a_sangria_nao_avisa(self):
+        self.assertEqual(self.warns(margin_outer_mm=3.0, bleed_mm=3.0), [])
+
+    def test_sem_sangria_nao_avisa(self):
+        self.assertEqual(self.warns(margin_outer_mm=2.0, bleed_mm=0.0), [])
+
+    def test_confirmacao_inclui_o_aviso(self):
+        txt = pi.cut_confirm_text(cut_cfg(margin_outer_mm=2.0, bleed_mm=3.0))
+        self.assertIsNotNone(txt)
+        self.assertIn("A margem externa (2 mm)", txt)
+
+
+class SemTkinterdnd2Tests(unittest.TestCase):
+    """Sem o pacote o módulo importa e o recurso fica desligado (DEC-016)."""
+
+    def test_modulo_importa_com_import_bloqueado(self):
+        import importlib.util
+        src = Path(pi.__file__)
+        spec = importlib.util.spec_from_file_location("pi_sem_dnd", src)
+        mod = importlib.util.module_from_spec(spec)
+        with mock.patch.dict(sys.modules, {"tkinterdnd2": None}):
+            spec.loader.exec_module(mod)
+        self.assertFalse(mod.DND_PKG_OK)
+        self.assertIs(mod._DnDBase, object)
+        self.assertIsNone(mod.TkinterDnD)
+
+    def test_janela_tem_o_setup_do_dnd(self):
+        # O recurso só liga depois do _require (capacidade provada, FIX-002).
+        self.assertIn("_setup_dnd", pi.PrintImposerApp.__dict__)
 
 
 class LauncherTests(unittest.TestCase):

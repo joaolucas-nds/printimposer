@@ -1,4 +1,4 @@
-# 🖨 PrintImposer v1.6
+# 🖨 PrintImposer v1.7
 
 **Imposição de páginas para impressão em massa** — junte dezenas de imagens em folhas prontas para imprimir e cortar.
 
@@ -53,6 +53,15 @@ pip install pillow-heif
 
 Sem ele, esses arquivos só não aparecem no seletor. O **AVIF** não precisa de nada: o Pillow recente já lê sozinho. `Ajuda › Sobre` mostra a linha «Formatos extras: AVIF sim/não · HEIC sim/não».
 
+### Arrastar e soltar (opcional)
+Para soltar arquivos e pastas na janela, direto do Explorer:
+
+```
+python -m pip install tkinterdnd2
+```
+
+Solte em qualquer ponto da janela: os arquivos vão para o fim da lista, como pelo **+ Arquivos** (uma pasta entra como pelo **+ Pasta**, sem subpastas). Sem o pacote, o cabeçalho diz `Arrastar: indisponível` e os botões seguem funcionando. Reordenar a lista arrastando não precisa de nada.
+
 ### Abrir com dois cliques
 Use **`Opções › Criar atalho…`**. O diálogo explica o que o atalho faz e sugere salvá-lo na pasta **acima** da pasta do projeto (onde fica a pasta `printimposer`). O `.bat` gerado abre o app sem janela de console e grava caminhos absolutos — se você mover a pasta do projeto, gere outro.
 
@@ -61,7 +70,7 @@ Use **`Opções › Criar atalho…`**. O diálogo explica o que o atalho faz e 
 ## 🖥 A janela
 
 ```
-┌ PrintImposer   Arquivo  Opções  Ajuda   v1.6.0 · SVG: … · PDF: … ┐
+┌ PrintImposer   Arquivo  Opções  Ajuda   v1.7.0 · SVG: … · PDF: … ┐
 ├────────────┬──────────────────────────────┬────────────────────────┤
 │ Imagens    │ Grade (colunas × linhas)  ◼◼ │ Preview         ◀  ▶   │
 │            │ ┌ seções recolhíveis ──────┐ │                        │
@@ -87,10 +96,10 @@ A coluna do meio tem três zonas:
 ### Imagens (esquerda)
 | Elemento | O que faz |
 |---|---|
-| **+ Arquivos** / **+ Pasta** | Adiciona imagens soltas ou uma pasta inteira. Não muda a pasta de saída. |
+| **+ Arquivos** / **+ Pasta**, ou **soltar** na janela | Adiciona imagens soltas ou uma pasta inteira. Arrastar do Explorer para qualquer ponto da janela faz o mesmo (precisa do `tkinterdnd2`). Não muda a pasta de saída. |
 | **Limpar** | Esvazia a lista. |
 | **Qtd** (`+`/`−` ou digitar) | Quantas cópias daquela imagem entram nas folhas. |
-| **▲ ▼** e **✕** | Reordena ou remove a imagem. |
+| **≡** (alça), **▲ ▼** e **✕** | Arraste a imagem pela alça até outra posição, ou use as setas; **✕** remove. |
 
 **Dica:** para 4 cópias do mesmo card, adicione-o uma vez e ponha **Qtd = 4**.
 
@@ -172,7 +181,7 @@ O campo «Qualidade» é um só: vale para o JPEG e para o PDF em modo JPEG.
    - Fundo colorido até a borda? Exporte com **3 mm de sangria** (A6 vira 111 × 154 mm) e use «A arte já tem sangria»; ou exporte no tamanho exato e use «Estender a borda».
    - **Fotos do celular** entram direto (JPEG, AVIF, e HEIC com o extra).
 2. **No PrintImposer**
-   - **+ Pasta** → a pasta com as artes.
+   - **+ Pasta** → a pasta com as artes (ou arraste a pasta do Explorer para a janela).
    - Grade **2 × 2** (atalho «4 por folha»), papel **A4**, **300 DPI**.
    - Ajuste **Ajustar (fit)** com **Auto-Rotate** ligado.
    - Margem externa **10 mm** (cabem as marcas de canto) e **0** entre colunas e entre linhas — ou **6 mm** entre elas, se usar sangria.
@@ -230,4 +239,4 @@ O motor de composição (`ImpositionEngine`) não depende da interface: testes e
 
 ---
 
-*PrintImposer v1.6.0 — uso pessoal/profissional de impressão em massa.*
+*PrintImposer v1.7.0 — uso pessoal/profissional de impressão em massa.*

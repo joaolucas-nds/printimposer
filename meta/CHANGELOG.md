@@ -8,6 +8,22 @@
 
 ---
 
+## [1.7.0] — 2026-11-10
+Arrastar e soltar, reordenar arrastando e aviso de sangria externa (wo0012, F5 etapa 1). A conferência na tela e com o Explorer está com o dono.
+
+### Adicionado
+- **Soltar arquivos e pastas em qualquer ponto da janela**, pelo mesmo funil do «+ Arquivos» (`tkinterdnd2` opcional, DEC-016). Pasta entra como no «+ Pasta» (primeiro nível, sem subpastas); a ordem é pelo nome; formato não suportado aparece em «Arquivos pulados». A lista acende e o rodapé dela diz «Solte para adicionar à lista» durante o arraste.
+- **Reordenar a lista arrastando** pela alça `≡` de cada linha (Tk puro, sem dependência); a linha de destino acende. ▲ ▼ e ✕ continuam.
+- **Aviso âmbar de sangria externa**: margem externa maior que 0 e menor que a sangria («na borda da folha, a sangria vai só até X mm»); entra na confirmação antes de gerar. Margem 0 não avisa.
+- Cabeçalho (`Arrastar: tkinterdnd2` / `Arrastar: indisponível`) e `Ajuda › Sobre` (`Arrastar e soltar: sim/não`) mostram o estado; sem o pacote o app abre como na 1.6.0.
+- `expand_dropped` e `move_item`: funções puras, sem Tk.
+- 19 testes headless (182 → 201).
+
+### Modificado
+- `VERSION` para 1.7.0; README para a 1.7 (seção «Arrastar e soltar (opcional)»).
+
+---
+
 ## [1.6.0] — 2026-11-06
 Marcas de canto e sangria (wo0010, F4 etapa 4 — fecha a F4). A conferência na tela e no papel está com o dono.
 

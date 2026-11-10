@@ -7,18 +7,18 @@
 ---
 
 ## Versão Atual
-**1.6.0** — 2026-11-06 — Marcas de canto na margem externa e sangria em dois modos (espelhar a borda / a arte já tem sangria), com avisos e confirmação antes de gerar; seção «Corte e sangria». Fecha a F4. Suíte verde (182 testes; 5 skips de SVG). Roteiro do dono feito em 07/11: tudo certo.
+**1.7.0** — 2026-11-10 — Arrastar e soltar arquivos e pastas na janela (`tkinterdnd2` opcional, DEC-016), reordenar a lista arrastando pela alça `≡` e aviso de sangria externa limitada pela margem. Suíte verde (201 testes; 5 skips de SVG). **Aguardando o roteiro do dono** (o soltar de verdade, a partir do Explorer, só ele confere).
 
 ## 🎯 Foco atual
-**Produto:** F5 em curso — ordem decidida em 10/11 (escada C, `meta/analises/261109-ANALISE-ordem-f5.md`). Agora: **1.7.0 — arrastar** (wo0012): soltar arquivos e pastas na janela, reordenar a lista arrastando, aviso de sangria externa.
+**Produto:** F5 em curso — ordem decidida em 10/11 (escada C, `meta/analises/261109-ANALISE-ordem-f5.md`). 1.7.0 (arrastar) entregue e aguardando o roteiro do dono; depois, a 1.8.0 (rotação por item + preencher N folhas).
 **Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013). WO que muda a interface traz o roteiro do dono **no chat** e a linha `/apply-wo` em bloco cercado.
 
-## ✅ Funcionando *(suíte headless verde; roteiro do dono da 1.6.0 feito em 07/11, tudo certo)*
+## ✅ Funcionando *(suíte headless verde; a 1.7.0 aguarda o roteiro do dono)*
 - Grade livre `cols × rows` até 12×12, com atalhos e miniatura do grid.
-- Lista de imagens com miniatura, quantidade, reordenação; "+ Arquivos" e "+ Pasta".
+- Lista de imagens com miniatura, quantidade, reordenação por ▲ ▼ ou arrastando pela alça `≡`; "+ Arquivos" e "+ Pasta", ou soltar arquivos e pastas em qualquer ponto da janela (com `tkinterdnd2`; sem ele o cabeçalho diz `Arrastar: indisponível`).
 - Ajuste fit / fill / stretch + Auto-Rotate.
 - Papéis A3/A4/A5/A6/Letter/Legal/Tabloid/Custom; DPI 72–1200; margens e cor de fundo.
-- Seção «Corte e sangria»: guia de corte `Nenhuma` / `Linhas atravessando` (sólida/tracejada/pontilhada, com espessura, traço e cor) / `Marcas de canto` (comprimento, distância e espessura em pt; 4 mm, 3 mm, 0,25 pt); sangria 0–10 mm, `Estender a borda (espelhar)` ou `A arte já tem sangria`; avisos âmbar/cinza e confirmação antes de gerar. Geometria em mm numa função pura (`sheet_geometry`).
+- Seção «Corte e sangria»: guia de corte `Nenhuma` / `Linhas atravessando` (sólida/tracejada/pontilhada, com espessura, traço e cor) / `Marcas de canto` (comprimento, distância e espessura em pt; 4 mm, 3 mm, 0,25 pt); sangria 0–10 mm, `Estender a borda (espelhar)` ou `A arte já tem sangria`; avisos âmbar/cinza (inclusive margem externa menor que a sangria) e confirmação antes de gerar. Geometria em mm numa função pura (`sheet_geometry`).
 - Guarda de qualidade (OK / atenção / perda visível) com confirmação antes de gerar.
 - Saída PNG (padrão), PDF, JPEG, TIFF, WebP e AVIF, com prefixo/sufixo/contador, anti-overwrite e até dois destinos. WebP (sem perda ou com perda) e AVIF são para compartilhar e só aparecem se o Pillow grava.
 - PDF sem perda por padrão (escritor próprio, DEC-014) ou JPEG; qualidade JPEG 50–100 escolhível.
@@ -34,13 +34,14 @@
 - Barra inferior mostra «Também grava em: …» com o segundo destino ligado (âmbar se inexistente ou temporário).
 
 ## 🔧 Em Progresso
-- 1.7.0 — arrastar (wo0012, Parte B).
+- (vazio)
 
 ## ❌ Quebrado / Com Problema
 - (nada conhecido.)
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
+- [ ] **Dono:** roteiro da 1.7.0 (no chat de 10/11 e no fim da wo0012) — em especial o soltar de verdade a partir do Explorer.
 - [ ] **Chat:** depois do roteiro da 1.7.0, spec da 1.8.0 (rotação por item + preencher N folhas) e, em paralelo, a análise do portão da moldura.
 - [ ] **Dono (opcional):** impressão de teste raster × vetorial numa **gráfica** de ponta (em casa, 06/11, a diferença só aparece de muito perto). Se o texto raster sair mole, reabre a vetorial (gatilho da DEC-015).
 - [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho», e a seção «Corte e sangria» com marcas de canto no preview (as capturas de 07/11 na pasta-pai servem).
@@ -52,3 +53,5 @@
 **2026-11-07** — Dono fez o roteiro da 1.6.0: tudo certo. Chat fechou a F4 no ROADMAP, acrescentou a armadilha 12 e os termos da F4 no GLOSSARY, e gravou o brief de handoff. Code aplicou a wo0011 (só documentos).
 
 **2026-11-09/10** — Análise da ordem da F5 (escada C) e medição `probe-f5`: `tkinterdnd2` 0.7.0 carrega com a raiz CTk (tkDnD 2.10.3). Dono aprovou a escada; o `.exe` foi para depois da moldura (hoje só ele usa) e vai sair publicado no GitHub Releases. Spec e wo0012 da 1.7.0 escritas.
+
+**2026-11-10 (Code)** — wo0012 aplicada: Parte A (docs, DEC-016) e Parte B (1.7.0, tag `v1.7.0`). Roteiro do dono pendente.

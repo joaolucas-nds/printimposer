@@ -39,9 +39,6 @@ Mandar para a impressora sem arquivo intermediário. No Windows passa por API de
 ### 2026-11-07 — Marcas de corte nos cantos internos (entre células)
 Hoje (1.6.0) as marcas de canto ficam só na margem externa, uma por ponta de cada corte — o padrão de cartões em lote. Marca no cruzamento interno ajudaria quem corta com estilete célula a célula, mas com espaçamento pequeno cairia sobre a arte vizinha; ficou fora de escopo na spec da etapa 4. Só faz sentido com espaçamento ≥ 2 × (distância + comprimento). **F5, se pedido.**
 
-### 2026-11-07 — Aviso de sangria externa limitada pela margem
-Com margem externa menor que a sangria, a sangria da borda externa é recortada pela margem **sem aviso próprio** — o aviso âmbar da 1.6.0 só cobre o espaçamento entre células (achado da sonda do Code na wo0010). Proposta: aviso âmbar «A margem externa (X mm) é menor que a sangria (Y mm): a sangria da borda vai até X mm». Pequeno; decisão pendente com o dono. **1.6.1 ou primeira versão da F5.**
-
 ### 2026-07-22 — Barra de progresso e status também merecem revisão
 A barra inferior tem um `CTkProgressBar` sempre visível mesmo parado, ocupando largura sem informar nada. Poderia aparecer só durante a geração, liberando espaço para o texto de status (onde entra o aviso do segundo destino). Pequeno, cosmético, na linha de "o que não informa não ocupa".
 
@@ -59,12 +56,6 @@ O teto de 12×12 impede o extremo, mas 10×10 num A4 dá células de ~20 mm: tec
 
 ### 2026-06-15 — Entrada vetorial → imposição vetorial *(grande)*
 Posicionar PDFs vetorialmente (pypdf/reportlab) em vez de rasterizar: qualidade perfeita, arquivos minúsculos, marcas sem peso. Mudança de arquitetura. **Portão da F4 decidido em 06/11: vai para a F5 (DEC-015).** Medido: nitidez do texto melhora de forma visível na tela; o arquivo não fica menor para o conteúdo do dono (bitmap embutido). **Volta antes** se uma impressão em gráfica de ponta mostrar o texto raster mole.
-
-### 2026-06-15 — Drag-and-drop de arquivos na janela
-Arrastar do Explorer para a lista, via `tkinterdnd2` com wrapper sobre `CTk`. Dependência opcional — degradar com elegância se ausente. **F5.**
-
-### 2026-06-15 — Reordenar a lista arrastando
-Drag-and-drop interno (hoje só ▲ ▼). Melhora a UX com muitos itens. **F5.**
 
 ### 2026-06-15 — Rotação manual por imagem
 Toggle 90° por item, além do Auto-Rotate global. **F5.**
@@ -116,6 +107,9 @@ Executável Windows para quem não tem Python. **F5, 1.10.0, depois da moldura**
 
 ## ✅ Concluídas
 > Ideia que virou realidade. Mantida aqui para histórico (com referência à versão/decisão).
+- **Drag-and-drop de arquivos na janela** *(assistente, 2026-06-15; pedido do dono em 07/11)* — implementado na 1.7.0 (F5, etapa 1): soltar arquivos e pastas em qualquer ponto da janela, via `tkinterdnd2` opcional (DEC-016).
+- **Reordenar a lista arrastando** *(assistente, 2026-06-15)* — implementado na 1.7.0: alça `≡` em cada linha, Tk puro; ▲ ▼ continuam.
+- **Aviso de sangria externa limitada pela margem** *(assistente, 2026-11-07)* — implementado na 1.7.0: aviso âmbar quando a margem externa é maior que 0 e menor que a sangria.
 - **Marcas de corte de canto** *(assistente, 2026-06-15)* — implementadas na 1.6.0 (F4, etapa 4), na margem externa, uma por ponta de cada linha de corte; padrão 4 mm, a 3 mm, 0,25 pt. Cantos internos ficaram de fora.
 - **Sangria configurável** *(assistente, 2026-06-15)* — implementada na 1.6.0 (F4, etapa 4): espelhar a borda ou usar a sangria da arte; limitada ao espaço entre as células.
 - **Saída WebP e AVIF** *(usuário, 2026-11-04)* — implementada na 1.5.0, para compartilhar (WebP sem perda ou com perda; AVIF com qualidade).

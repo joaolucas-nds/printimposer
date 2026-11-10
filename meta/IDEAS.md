@@ -17,6 +17,9 @@
 
 ## 💡 Ideias Ativas — Usuário
 
+### 2026-11-10 — Página de download profissional no GitHub
+Publicar o app no GitHub como projeto «de verdade»: página de **Releases** com o executável para baixar, notas de versão e estrutura de repositório profissional. O executável é a 1.10.0 (ver «Empacotar como .exe»). **Dá para adiantar, sem executável:** criar as Releases das tags que já existem (`v1.0.0` … `v1.6.0`) com as notas do CHANGELOG, via `gh release create` no Code — uma WO curta, a qualquer momento. Baixar sem login exige o repositório público; hoje a visibilidade não foi conferida.
+
 ### 2026-06 — Moldura de várias fotos (ex.: 2 horizontais iguais + 1 retrato alta)
 Layout não-uniforme tipo "moldura". Exige células de tamanhos diferentes — outro modelo que o grid regular. Candidato a "modo de layout customizado". **Caso de uso do dono (04/11):** um fotógrafo pega uma série de fotos e monta, em segundos, várias molduras diferentes com as fotos variadas. **F5.**
 
@@ -70,7 +73,7 @@ Toggle 90° por item, além do Auto-Rotate global. **F5.**
 "Repetir até encher a última folha" ou "preencher exatamente X folhas". Acelera tiragens. **F5.**
 
 ### 2026-06-15 — Empacotar como .exe (PyInstaller)
-Executável Windows para quem não tem Python. **F5.**
+Executável Windows para quem não tem Python. **F5, 1.10.0, depois da moldura** (10/11: hoje só o dono usa). Formato: PyInstaller `--onedir` (o CustomTkinter não empacota em arquivo único) com o hook do `tkinterdnd2`, publicado no GitHub Releases por GitHub Actions a cada tag — zip versionado, soma SHA-256 e notas do CHANGELOG. Sem assinatura de código, o Windows mostra o SmartScreen na primeira execução; assinar custa um certificado anual e fica para quando houver usuário de fora.
 
 ---
 

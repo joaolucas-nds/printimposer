@@ -10,8 +10,8 @@
 **1.6.0** — 2026-11-06 — Marcas de canto na margem externa e sangria em dois modos (espelhar a borda / a arte já tem sangria), com avisos e confirmação antes de gerar; seção «Corte e sangria». Fecha a F4. Suíte verde (182 testes; 5 skips de SVG). Roteiro do dono feito em 07/11: tudo certo.
 
 ## 🎯 Foco atual
-**Produto:** F1–F4 concluídas (F4 fechada em 07/11). Próxima frente: **planejar a F5** — ordem interna **ainda não decidida**; começa por análise (`meta/analises/`), não por WO.
-**Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013). WO que muda a interface traz o roteiro do dono **no chat** e a linha `/apply-wo` em bloco cercado. Handoff de 07/11: `../261107-HANDOFF-BRIEF.md` (pasta-pai, fora do repo).
+**Produto:** F5 em curso — ordem decidida em 10/11 (escada C, `meta/analises/261109-ANALISE-ordem-f5.md`). Agora: **1.7.0 — arrastar** (wo0012): soltar arquivos e pastas na janela, reordenar a lista arrastando, aviso de sangria externa.
+**Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013). WO que muda a interface traz o roteiro do dono **no chat** e a linha `/apply-wo` em bloco cercado.
 
 ## ✅ Funcionando *(suíte headless verde; roteiro do dono da 1.6.0 feito em 07/11, tudo certo)*
 - Grade livre `cols × rows` até 12×12, com atalhos e miniatura do grid.
@@ -34,24 +34,21 @@
 - Barra inferior mostra «Também grava em: …» com o segundo destino ligado (âmbar se inexistente ou temporário).
 
 ## 🔧 Em Progresso
-- (vazio)
+- 1.7.0 — arrastar (wo0012, Parte B).
 
 ## ❌ Quebrado / Com Problema
 - (nada conhecido.)
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
-- [ ] **Chat:** planejar a F5 — análise da ordem interna (moldura de várias fotos, drag-and-drop, `.exe`, imposição vetorial do PDF, preencher N folhas, rotação por item). Nada decidido ainda.
-- [ ] **Chat → dono (decidir):** aviso próprio quando a margem externa é menor que a sangria (hoje a sangria da borda externa é recortada pela margem sem aviso; o aviso âmbar só cobre o espaçamento). Ver IDEAS de 2026-11-07. Pequeno; pode entrar como 1.6.1 ou dentro da primeira versão da F5.
+- [ ] **Chat:** depois do roteiro da 1.7.0, spec da 1.8.0 (rotação por item + preencher N folhas) e, em paralelo, a análise do portão da moldura.
 - [ ] **Dono (opcional):** impressão de teste raster × vetorial numa **gráfica** de ponta (em casa, 06/11, a diferença só aparece de muito perto). Se o texto raster sair mole, reabre a vetorial (gatilho da DEC-015).
-- [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho», e agora a seção «Corte e sangria» com marcas de canto no preview.
+- [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho», e a seção «Corte e sangria» com marcas de canto no preview (as capturas de 07/11 na pasta-pai servem).
 - [ ] **Dono:** colar o `INSTRUCOES-DO-PROJETO.md` do repo no painel do Projeto — mudou em 04/11 (linha do `/apply-wo` e do roteiro).
 - [ ] **Dono:** limpar `.claude/settings.local.json` (≈20 permissões avulsas dos testes de julho; agora ignorado pelo git).
 
 ## 💬 Última conversa
 
-**2026-11-06** — Portão vetorial decidido **B** com duas sondas (jsPDF e Figma): N-up correto e nitidez visível, mas o arquivo vetorial não fica ≤ 1/3 do raster (0,41–4,0×). Teste de papel em casa: diferença só de muito perto. Vetorial vai para a F5 (DEC-015). Spec da etapa 4 escrita (marcas + sangria).
+**2026-11-07** — Dono fez o roteiro da 1.6.0: tudo certo. Chat fechou a F4 no ROADMAP, acrescentou a armadilha 12 e os termos da F4 no GLOSSARY, e gravou o brief de handoff. Code aplicou a wo0011 (só documentos).
 
-**2026-11-06 (Code)** — Code aplicou a wo0010: commit A de docs (`b165a32`) e a 1.6.0 (marcas de canto + sangria; `sheet_geometry` em mm). 136 → 182 testes; smoke programático 9 + 5 itens passou.
-
-**2026-11-07** — Dono fez o roteiro da 1.6.0: tudo certo. Chat fechou a F4 no ROADMAP (🟢; F5 🟡, não planejada), acrescentou a armadilha 12 (`cut_lines` → `cut_guide`) e os termos da F4 no GLOSSARY, e gravou o brief de handoff na pasta-pai. Code aplicou a wo0011 (só documentos). Próximo: conversa nova do chat para planejar a F5.
+**2026-11-09/10** — Análise da ordem da F5 (escada C) e medição `probe-f5`: `tkinterdnd2` 0.7.0 carrega com a raiz CTk (tkDnD 2.10.3). Dono aprovou a escada; o `.exe` foi para depois da moldura (hoje só ele usa) e vai sair publicado no GitHub Releases. Spec e wo0012 da 1.7.0 escritas.

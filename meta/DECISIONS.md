@@ -386,3 +386,26 @@ O portão da etapa 3 da F4 perguntava se a saída PDF devia posicionar as págin
 - Biblioteca para quando voltar: `pypdf` (acertou de primeira, preserva bytes de JPEG e PNG, deduplica com passadas repetidas). O `pypdfium2` errou a matriz duas vezes e não embute PNG sem reencodar.
 - Teste de papel em casa (06/11): diferença só de muito perto. **Gatilho de reabertura:** impressão numa gráfica de ponta mostrar o texto raster visivelmente mole.
 - O DEC-001 («qualidade perfeita e arquivos minúsculos») vale pela metade para o conteúdo do dono: qualidade sim, tamanho não.
+
+---
+
+## DEC-016 — Arrastar e soltar via `tkinterdnd2` opcional, registrado na janela inteira
+**Data:** 2026-11-10 · **Status:** aceita
+
+### Contexto
+O dono pediu, em 07/11, arrastar imagens e PDFs para a janela. O Tk não tem soltar arquivos nativo; o `tkinterdnd2` embrulha o tkDnD, mas o uso documentado troca a raiz por `TkinterDnD.Tk()`, e a raiz do app é `ctk.CTk`. Medido em 10/11 (`probe-f5`): `class Win(ctk.CTk, TkinterDnD.DnDWrapper)` + `TkinterDnD._require(win)` carrega o tkDnD 2.10.3 no Python 3.13.13 do dono, e um `CTkFrame` filho registra `DND_FILES` sem erro.
+
+### Decisão
+- `tkinterdnd2` é **dependência opcional**, como `pypdfium2`: sem ela, o app abre igual à 1.6.0 e o cabeçalho diz `Arrastar: indisponível`.
+- A `PrintImposerApp` mistura `DnDWrapper` quando o import funciona; o recurso só liga depois que `TkinterDnD._require(self)` devolve uma versão (capacidade provada, FIX-002).
+- O alvo do soltar é a **janela inteira**; os caminhos saem de `self.tk.splitlist(event.data)` e passam pelo funil de sempre (`expand_dropped` → `plan_ingest`).
+- A reordenação da lista arrastando é **Tk puro** (eventos de mouse na alça da linha), sem `tkinterdnd2`.
+
+### Alternativas consideradas
+- **Registrar só a lista** — o tkDnD entrega ao widget sob o ponteiro, e as linhas são recriadas a cada mudança: cada uma teria de se registrar. Mais superfície para errar, sem ganho para o usuário.
+- **`WM_DROPFILES` via `ctypes`** — só Windows, com gancho de janela escrito à mão; o `tkinterdnd2` já estava medido.
+- **Dependência obrigatória** — contraria a regra de degradação elegante do projeto (CONTEXT, convenções).
+
+### Consequências
+- O executável (1.10.0) precisa do hook do `tkinterdnd2` no PyInstaller, ou falha com «Unable to load tkdnd library».
+- A janela principal passa a herdar de uma classe de terceiros que usa `self._w`: o `TkAttributeCollisionTests` continua valendo, e mudança nessa classe pede `/smoke`.

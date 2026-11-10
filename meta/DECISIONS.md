@@ -55,7 +55,7 @@ Usar CustomTkinter (sobre Tkinter), tema escuro.
 ---
 
 ## DEC-003 — Arquitetura em arquivo único
-**Data:** 2026-06-02 · **Status:** aceita
+**Data:** 2026-06-02 · **Status:** substituída pela DEC-017 (2026-11-10)
 
 ### Contexto
 Utilitário pessoal, distribuído como "baixe e rode".
@@ -409,3 +409,45 @@ O dono pediu, em 07/11, arrastar imagens e PDFs para a janela. O Tk não tem sol
 ### Consequências
 - O executável (1.10.0) precisa do hook do `tkinterdnd2` no PyInstaller, ou falha com «Unable to load tkdnd library».
 - A janela principal passa a herdar de uma classe de terceiros que usa `self._w`: o `TkAttributeCollisionTests` continua valendo, e mudança nessa classe pede `/smoke`.
+
+
+---
+
+## DEC-017 — Dois módulos: núcleo sem Tk (`imposer_core.py`) e GUI (`print_imposer.py`)
+**Data:** 2026-11-10 · **Status:** aceita · **Substitui:** DEC-003
+
+### Contexto
+A DEC-003 (arquivo único, 06/2026) previa reavaliar «se a entrada vetorial chegar»; ela chegou na 1.4.0. Em 10/11 o arquivo tinha 3.875 linhas, e as linhas 1–1.907 (exceto o import do CustomTkinter e o bloco do arrastar) já não usavam Tk. A moldura (1.9.0) e a vetorial mexem no centro do motor. E o argumento «baixe e rode um arquivo» perdeu força: há um usuário, e o executável vem na 1.10.0. Análise: `meta/analises/261110-ANALISE-portao-moldura.md`.
+
+### Decisão
+Dois arquivos na raiz: `imposer_core.py` (dependências opcionais sem Tk, constantes, persistência, modelo, geometria, PDF, motor, `.bat`, ingestão) e `print_imposer.py` (GUI e `main()`, o arquivo que o `.bat` abre). A GUI importa o núcleo; o núcleo nunca importa a GUI nem Tk. `print_imposer.py` reexporta o núcleo (`from imposer_core import *`, mais os nomes com `_` que usa). Feita numa versão só de refatoração (1.8.1), conferida por SHA-256 idêntico das folhas geradas antes e depois.
+
+### Alternativas consideradas
+- **Manter o arquivo único** — a moldura o levaria a mais de 4.300 linhas, com âncoras de WO cada vez mais frágeis.
+- **Pacote com muitos módulos** — mais imports cruzados (os globais dos back-ends são lidos dos dois lados) e um diff maior, sem ganho a mais para um projeto de um usuário.
+
+### Consequências
+- Patch de teste mira o módulo que **lê** o nome (`imposer_core`, quase sempre): patch em `print_imposer` vira inerte em silêncio.
+- Testes de AST leem o arquivo certo; um teste guarda a fronteira (o núcleo sem import de Tk).
+- O núcleo pode ser testado sem o stub de Tk.
+
+---
+
+## DEC-018 — Moldura por divisões sucessivas, com catálogo pronto
+**Data:** 2026-11-10 · **Status:** aceita (implementação na 1.9.0)
+
+### Contexto
+O critério da F5 pede layout não-uniforme. Caso do dono: duas fotos horizontais iguais e uma retrato alta na mesma folha; uso real (04/11): um fotógrafo monta, em segundos, várias molduras com uma série de fotos. O Lightroom separa grade, «Picture Package» e «Custom Package», e otimiza o arranjo para o menor número de cortes; as folhas «divididas» dos laboratórios (ex.: 1× 5×7 + 2× 4×5 numa 8×10) se cortam com cortes retos, pedaço por pedaço.
+
+### Decisão
+Uma moldura é uma **árvore de divisões**: cada nó divide o espaço em partes, na vertical ou na horizontal, com proporções; as folhas da árvore são os slots, preenchidos em ordem de leitura. A grade `cols × rows` é o caso particular e não muda de saída. A 1.9.0 entrega um catálogo — `1 + 2`, `2 + 1`, `1 + 3`, `Destaque + 4`, `1 + 2 + 1` — com um controle de proporção por modelo. Cortes viram **segmentos**; marcas vão nas pontas de segmento que tocam a borda da área útil (na grade, exatamente as da 1.6.0); divisão vertical usa o espaçamento entre colunas, horizontal o entre linhas; sangria como na 1.6.0; a guarda de qualidade mede cada item contra o slot em que ele cai.
+
+### Alternativas consideradas
+- **Lista fixa desenhada à mão** — cada moldura seria código novo, sem proporção ajustável.
+- **Editor livre de caixas** — a maior UI da fase; caixas soltas não garantem cortes retos e deixam marcas e sangria sem regra.
+- **Células por tamanho físico com arranjo automático** — problema de empacotamento; o resultado dele é uma árvore desta decisão, então pode vir depois por cima.
+
+### Consequências
+- O preset ganha um campo opcional (`layout`); ausente, vale a grade.
+- Um editor de divisões e o arranjo por tamanho físico podem vir depois sobre o mesmo formato, sem migração.
+- O desenhista vetorial da F5 desenha a geometria já generalizada, uma vez só.

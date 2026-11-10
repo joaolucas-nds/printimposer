@@ -7,13 +7,13 @@
 ---
 
 ## Versão Atual
-**1.8.0** — 2026-11-10 — Rotação por item (`⟳`: 0° segue o Auto-Rotate; 90/180/270° exatos) e `Preencher ▾` (completar a última folha; exatamente N folhas). Suíte verde (218 testes; 5 skips de SVG). **Aguardando o roteiro do dono** (a rotação e o preencher na tela, só ele confere).
+**1.8.0** — 2026-11-10 — Rotação por item (`⟳`: 0° segue o Auto-Rotate; 90/180/270° exatos) e `Preencher ▾` (completar a última folha; exatamente N folhas). Suíte verde (218 testes; 5 skips de SVG). Roteiro do dono feito em 10/11: tudo certo.
 
 ## 🎯 Foco atual
-**Produto:** F5 em curso — ordem decidida em 10/11 (escada C, `meta/analises/261109-ANALISE-ordem-f5.md`). 1.7.0 (arrastar) conferida pelo dono em 10/11; 1.8.0 (tiragem: rotação por item e preencher folhas) entregue e aguardando o roteiro do dono.
+**Produto:** F5 em curso (escada C). 1.7.0 e 1.8.0 conferidas pelo dono em 10/11; portão da moldura decidido (modelo de divisões sucessivas, DEC-018). Agora: **1.8.1 — reorganização** (wo0014) em dois módulos, sem mudança para quem usa; depois, a **1.9.0 — moldura**.
 **Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013). WO que muda a interface traz o roteiro do dono **no chat** e a linha `/apply-wo` em bloco cercado.
 
-## ✅ Funcionando *(suíte headless verde; a 1.8.0 aguarda o roteiro do dono)*
+## ✅ Funcionando *(suíte headless verde; roteiro do dono da 1.8.0 feito em 10/11, tudo certo)*
 - Grade livre `cols × rows` até 12×12, com atalhos e miniatura do grid.
 - Lista de imagens com miniatura, quantidade, reordenação por ▲ ▼ ou arrastando pela alça `≡`; rotação por item com `⟳`; `Preencher ▾` (completar a última folha ou exatamente N folhas); "+ Arquivos" e "+ Pasta", ou soltar arquivos e pastas em qualquer ponto da janela (com `tkinterdnd2`; sem ele o cabeçalho diz `Arrastar: indisponível`).
 - Ajuste fit / fill / stretch + Auto-Rotate; rotação manual por item (0° segue o Auto-Rotate; 90/180/270° exatos).
@@ -34,15 +34,14 @@
 - Barra inferior mostra «Também grava em: …» com o segundo destino ligado (âmbar se inexistente ou temporário).
 
 ## 🔧 Em Progresso
-- (vazio)
+- 1.8.1 — reorganização (wo0014, Parte B).
 
 ## ❌ Quebrado / Com Problema
 - (nada conhecido.)
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
-- [ ] **Dono:** roteiro da 1.8.0 (no chat de 10/11 e no fim da wo0013) — em especial o `⟳` numa página de PDF e o `Preencher ▾`.
-- [ ] **Chat:** análise do portão da moldura (modelo das células, cortes e marcas em layout não-uniforme, DEC-003) — pode correr em paralelo à 1.8.0.
+- [ ] **Chat:** depois da 1.8.1, atualizar CONTEXT e GLOSSARY para os dois módulos e escrever a spec da 1.9.0 (moldura, DEC-018).
 - [ ] **Dono (opcional):** impressão de teste raster × vetorial numa **gráfica** de ponta (em casa, 06/11, a diferença só aparece de muito perto). Se o texto raster sair mole, reabre a vetorial (gatilho da DEC-015).
 - [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho», e a seção «Corte e sangria» com marcas de canto no preview (as capturas de 07/11 na pasta-pai servem).
 - [ ] **Dono:** colar o `INSTRUCOES-DO-PROJETO.md` do repo no painel do Projeto — mudou em 04/11 (linha do `/apply-wo` e do roteiro).
@@ -50,10 +49,4 @@
 
 ## 💬 Última conversa
 
-**2026-11-09/10** — Análise da ordem da F5 (escada C) e medição `probe-f5`: `tkinterdnd2` 0.7.0 carrega com a raiz CTk (tkDnD 2.10.3). Dono aprovou a escada; o `.exe` foi para depois da moldura (hoje só ele usa) e vai sair publicado no GitHub Releases. Spec e wo0012 da 1.7.0 escritas.
-
-**2026-11-10 (Code)** — wo0012 aplicada: Parte A (docs, DEC-016) e Parte B (1.7.0, tag `v1.7.0`). Roteiro do dono pendente.
-
-**2026-11-10 (tarde)** — Dono fez o roteiro da 1.7.0: tudo certo. Chat marcou a 1.7.0 ✅ no ROADMAP e escreveu a spec e a wo0013 da 1.8.0 (tiragem).
-
-**2026-11-10 (Code)** — wo0013 aplicada: Parte A (docs) e Parte B (1.8.0, tag `v1.8.0`). Roteiro do dono pendente.
+**2026-11-10** — Num dia: 1.7.0 (arrastar) e 1.8.0 (tiragem) aplicadas pelo Code e conferidas pelo dono («tudo certo» nas duas). Portão da moldura decidido: divisões sucessivas com catálogo pronto (DEC-018) e o arquivo único dividido em núcleo + GUI numa 1.8.1 (DEC-017). Spec e wo0014 escritas.

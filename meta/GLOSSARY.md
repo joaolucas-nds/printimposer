@@ -28,6 +28,7 @@
 - **PrintImposerApp** — janela principal (CTk) que orquestra os painéis.
 - **ImageListPanel / ConfigPanel / PreviewPanel** — os três painéis da UI (lista, configurações, preview).
 - **ImageRow** — uma linha da lista (miniatura, nome, quantidade, botões).
+- **`imposer_core` (núcleo)** — o módulo sem Tk desde a 1.8.1 (DEC-017): dependências opcionais, constantes, modelo, geometria, PDF, motor e ingestão. `print_imposer.py` é a GUI e o reexporta.
 
 ## Comandos / artefatos
 - **`print_imposer.py`** — o app inteiro; rodar com `python print_imposer.py`.
@@ -61,6 +62,15 @@
 - **Sonda** — medição que o Code roda sem editar o repo nem commitar, devolvendo número cru + comando; o relatório vai para a pasta-pai.
 - **Roteiro do dono** — o que o dono abre, faz e vê quando está certo, para conferir uma mudança de interface; vai escrito no chat, no mesmo turno da WO.
 
+## Termos da F5
+- **Alça (`≡`)** — o ponto de cada linha da lista por onde se arrasta a imagem para reordenar (1.7.0).
+- **Rotação por item (`⟳`)** — 0° segue o Auto-Rotate; 90°, 180° e 270° são exatos e desligam o Auto-Rotate só para aquele item (1.8.0).
+- **Preencher** — `Completar a última folha` e `Exatamente N folhas…`: mexem nas quantidades à vista, não num modo escondido (1.8.0).
+- **Moldura** — layout não-uniforme: células de tamanhos diferentes na mesma folha (1.9.0, DEC-018).
+- **Divisões sucessivas** — o modelo da moldura: a área útil é dividida na vertical ou na horizontal, com proporções, e cada parte pode ser dividida de novo; cortável na guilhotina por construção. A grade `cols × rows` é o caso particular.
+- **Slot** — cada célula onde entra uma imagem; na moldura, cada slot tem o seu tamanho e é preenchido em ordem de leitura.
+- **Segmento de corte** — na moldura, o corte que atravessa só o pedaço da vez (não a folha inteira); as marcas vão nas pontas que tocam a borda da área útil.
+
 ## Ferramentas do fluxo de trabalho
 - **KCM / Kit de Contexto Universal** — o sistema de documentação (CEREBRO, CONTEXT, STATUS, DECISIONS…) que permite trocar de conversa sem perder contexto. Versão adotada: v1.133.0 (2026-11-03).
 - **ASU (Atualizador Automático de Scripts)** — ferramenta que aplica edições cirúrgicas em arquivos a partir de uma instrução `.yaml`. **Aposentado em 2026-11-03 (DEC-012)**; foi o modo de edição de código de 18/07 a 03/11 (DEC-007). Guia arquivado em `zz_backups/261103-INSTRUCTION_GUIDE-asu.md`.
@@ -72,6 +82,6 @@
 ## Identificadores
 - **DEC-N** — decisão de arquitetura/design em DECISIONS.md.
 - **FIX-N** — bug grave resolvido em DECISIONS.md.
-- **F1…F5** — fases do ROADMAP (F1–F4 concluídas; F5 é a próxima).
+- **F1…F5** — fases do ROADMAP (F1–F4 concluídas; F5 em curso).
 - **N-up livre** — grade definida por `colunas × linhas` arbitrárias, sem lista cadastrada (DEC-009).
 - **Preset** — configuração inteira salva com nome: grade + papel + DPI + margens + corte + formato.

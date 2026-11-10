@@ -14,14 +14,15 @@ PrintImposer é uma ferramenta desktop de **imposição de páginas** para impre
 - **GUI:** CustomTkinter (sobre Tkinter) — tema escuro
 - **Imagem/composição:** Pillow (PIL) — resize LANCZOS, composição RGBA, export PDF/PNG/JPEG/TIFF
 - **Concorrência:** `threading` (geração e preview fora da UI thread)
-- **Distribuição:** script único, rodado com `python print_imposer.py`
+- **Distribuição:** dois módulos na raiz (DEC-017), rodados com `python print_imposer.py`; executável Windows previsto para a 1.10.0
 - **Testes:** `tests/test_engine.py` — suíte headless via stub de tkinter. **Não cobrem a GUI**: janela, divisórias e DPI só se validam abrindo o app (ver CLAUDE.md §Smoke test).
 - **SVG (opcional):** `cairosvg` ou `svglib`; ausente, o `.svg` some da lista de formatos.
 
 ## Estrutura do Projeto
 ```
 printimposer/
-├── print_imposer.py       # TODO o app em um arquivo (~1960 linhas)
+├── print_imposer.py       # GUI e main() — é o que se abre (~2.090 linhas em 10/11)
+├── imposer_core.py        # núcleo sem Tk: modelo, geometria, PDF, motor, ingestão (~1.810)
 ├── tests/test_engine.py   # suíte headless (engine + checagens AST do fonte)
 ├── CLAUDE.md              # guia da raia de execução (Claude Code)
 ├── .claude/               # settings.json + skills /apply-wo /smoke /wrap /sondar
@@ -30,7 +31,7 @@ printimposer/
 │   └── workorders/        # WOs: COMO aplicar (chat escreve, Code aplica)
 └── README.md              # documentação de uso
 ```
-O arquivo único está organizado em camadas internas (ver Arquitetura).
+A GUI importa o núcleo e o reexporta (`from imposer_core import *`); o núcleo nunca importa a GUI nem Tk (DEC-017). Dentro de cada arquivo, as seções seguem os marcadores `# ═══`.
 
 ## Convenções de Código
 - **Nomes:** arquivos, funções e variáveis em **inglês**; comentários em **PT-BR**.
@@ -64,7 +65,7 @@ A relação **qualidade × DPI**: a folha é rasterizada no DPI escolhido. Se a 
 - **Separação Engine × GUI** — `ImpositionEngine` não depende de Tkinter; dá para testar headless. Ver DEC-004.
 - **Raster, não vetorial (v1)** — composição via Pillow; PDF é imagem rasterizada. Ver DEC-001.
 - **CustomTkinter para a UI** — visual moderno com baixo custo. Ver DEC-002.
-- **Arquivo único** — simplicidade de distribuição. Ver DEC-003.
+- **Dois módulos: núcleo sem Tk + GUI** — desde a 1.8.1; substitui o arquivo único (DEC-003). Ver DEC-017.
 - **Linhas de corte atravessam a folha (v1)** — marcas de canto profissionais ficaram para depois. Ver DEC-005.
 - **Grade de layout livre (`cols × rows`), não uma lista cadastrada** — implementada na 1.1.0. Ver DEC-009.
 - **O chat planeja, o Claude Code implementa** — spec, análise e WO no chat; código, testes, smoke, commit e push no Code. Ver DEC-012 (substitui DEC-007 e DEC-010).
@@ -85,9 +86,12 @@ A relação **qualidade × DPI**: a folha é rasterizada no DPI escolhido. Se a 
 11. **Isolar o app num teste definindo só `HOME`** — parece criar um usuário limpo, mas no Windows, desde o Python 3.8, `Path.home()` lê `USERPROFILE` e **ignora `HOME`**; o `SettingsStore` (`Path.home() / ".printimposer"`) grava então nas configurações reais do dono. Em 03/11 o dono achou o segundo destino ligado apontando para `AppData\Local\Temp\claude\…`, sobra de teste. → Para abrir o app em teste, defina `USERPROFILE` **e** `HOME` para a pasta temporária, e confira no Sobre qual `settings.json` está em uso antes de mexer em qualquer campo.
 12. **Usar `cut_lines` em código novo** — o campo existiu até a 1.5 e parece vivo nos presets antigos, mas desde a 1.6.0 o modelo usa `cut_guide` (`"none"`/`"lines"`/`"marks"`); `cut_lines` só é lido no `from_dict`, para converter config e preset antigos. → Leia e grave `cut_guide`. E a geometria de corte, sangria e marcas vem de `sheet_geometry` (em mm): não recalcule posição de célula à parte, ou preview e saída divergem em 1–2 px.
 
+13. **Fazer `mock.patch.object(pi, …)` num nome do núcleo** — `import print_imposer as pi` ainda enxerga tudo, então parece o alvo natural, mas `pi.X` é uma **cópia** do nome de `imposer_core`: trocar a cópia não muda o que as funções do núcleo leem, e o teste passa sem testar nada (na 1.8.1, o patch de `PDF_OK` estava assim). → Faça o patch no módulo que **lê** o nome (`imposer_core`, quase sempre). Ver DEC-017.
+
 ## 📁 Arquivos Críticos (não mexer sem contexto)
 > Conhecimento **estável**, não estado do agora — por isso vive aqui, e não no STATUS.
-- `print_imposer.py` — app inteiro. Antes de tocar na composição, ler «Como a imposição funciona» acima. `compose_page` **não muta `cfg`**: preview e geração compartilham o `LayoutConfig` entre threads (FIX-004).
+- `imposer_core.py` — o motor, a geometria e o modelo. Antes de tocar na composição, ler «Como a imposição funciona» acima. `compose_page` **não muta `cfg`**: preview e geração compartilham o `LayoutConfig` entre threads (FIX-004).
+- `print_imposer.py` — a GUI e o `main()`; a janela principal mistura `DnDWrapper` (DEC-016). Nada grava em nome reservado do Tk (FIX-003); mudança aqui fecha com `/smoke`.
 - `tests/test_engine.py` — a única rede antes do smoke. Três testes inspecionam o **código-fonte** por AST (colisão com nomes do Tkinter, contrato da área útil), porque o stub headless não reproduz esses bugs. Rodar antes de qualquer commit de código.
 - `CLAUDE.md` / `.claude/` — contrato da raia de execução (DEC-012). O `settings.json` proíbe de propósito o Code editar CEREBRO, Instruções e LOG-TEMPLATE, e o chat não grava em `.claude/`: mudança de permissão chega como arquivo na pasta-pai e o dono copia.
 - `meta/CEREBRO.md` — alinhado ao kit v1.133.0; o que é só deste projeto vai na seção «Técnicas específicas», que nenhum update sobrescreve.

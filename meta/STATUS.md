@@ -10,7 +10,7 @@
 **1.8.1** — 2026-11-10 — Reorganização: núcleo sem Tk em `imposer_core.py`, GUI em `print_imposer.py` (DEC-017). Saída idêntica à 1.8.0 (24 de 24 SHA-256). Suíte verde (221 testes; 5 skips de SVG). Aguardando o dono abrir o app uma vez.
 
 ## 🎯 Foco atual
-**Produto:** F5 em curso (escada C). 1.7.0 e 1.8.0 conferidas pelo dono em 10/11; portão da moldura decidido (modelo de divisões sucessivas, DEC-018). Agora: **1.8.1 — reorganização** (wo0014) em dois módulos, sem mudança para quem usa; depois, a **1.9.0 — moldura**.
+**Produto:** F5 em curso (escada C). 1.7.0 e 1.8.0 conferidas pelo dono em 10/11; portão da moldura decidido (modelo de divisões sucessivas, DEC-018). **1.8.1 — reorganização** (wo0014) entregue em dois módulos, aguardando o dono abrir o app uma vez; depois, a **1.9.0 — moldura**.
 **Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013). WO que muda a interface traz o roteiro do dono **no chat** e a linha `/apply-wo` em bloco cercado.
 
 ## ✅ Funcionando *(suíte headless verde; roteiro do dono da 1.8.0 feito em 10/11, tudo certo)*

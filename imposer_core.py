@@ -150,7 +150,7 @@ HEIF_OK: bool = _probe_heif()
 # CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION  = "1.8.1"
+VERSION  = "1.9.0"
 APP_NAME = "PrintImposer"
 MM_TO_INCH = 1.0 / 25.4
 
@@ -213,6 +213,20 @@ MARK_OFFSET_RANGE = (0.0, 15.0)    # mm
 MARK_WIDTH_RANGE  = (0.1, 2.0)     # pt
 BLEED_RANGE       = (0.0, 10.0)    # mm
 MARK_COLOR = (0, 0, 0)             # preto 100%
+# Layout da folha (DEC-018): `grid` é a grade colunas × linhas de sempre; as demais
+# chaves são molduras do catálogo (células de tamanhos diferentes na mesma folha).
+LAYOUT_KEYS   = ["grid", "1+2", "2+1", "1+3", "destaque4", "1+2+1"]
+LAYOUT_LABELS = ["Grade", "1 + 2", "2 + 1", "1 + 3", "Destaque + 4", "1 + 2 + 1"]
+# O que a «Proporção (%)» mede em cada moldura (a grade não tem proporção).
+LAYOUT_HINTS = {
+    "1+2": "largura da foto da esquerda",
+    "2+1": "altura da faixa de cima",
+    "1+3": "altura da foto de cima",
+    "destaque4": "altura do destaque",
+    "1+2+1": "altura da faixa do meio",
+}
+LAYOUT_RATIO_RANGE   = (20, 80)    # %
+LAYOUT_RATIO_DEFAULT = 50
 FIT_LABELS  = ["Ajustar (fit)", "Preencher (fill)", "Esticar (stretch)"]
 FIT_KEYS     = ["fit",           "fill",              "stretch"]
 def build_out_formats(can_save=_probe_can_save) -> List[str]:
@@ -814,7 +828,7 @@ class LayoutConfig:
 
     # Campos que compõem um preset nomeado (tudo menos caminhos de pasta).
     PRESET_FIELDS = (
-        "cols", "rows", "paper_key", "paper_w_mm", "paper_h_mm", "dpi",
+        "cols", "rows", "layout", "layout_ratio_pct", "paper_key", "paper_w_mm", "paper_h_mm", "dpi",
         "margin_outer_mm", "margin_between_x_mm", "margin_between_y_mm",
         "bg_color", "fit_mode",
         "auto_rotate", "cut_guide", "cut_color", "cut_width_px", "cut_style",
@@ -827,6 +841,8 @@ class LayoutConfig:
         # Grade livre (DEC-009): não há mais lista fechada de layouts.
         self.cols:              int   = 2
         self.rows:              int   = 2
+        self.layout:            str   = "grid"         # grid | chave de moldura (DEC-018)
+        self.layout_ratio_pct:  int   = LAYOUT_RATIO_DEFAULT
         self.paper_key:         str   = "A4"
         self.paper_w_mm:        float = 210.0
         self.paper_h_mm:        float = 297.0
@@ -880,6 +896,10 @@ class LayoutConfig:
         for k, v in d.items():
             if hasattr(self, k):
                 setattr(self, k, v)
+        if self.layout not in LAYOUT_KEYS:
+            self.layout = "grid"
+        self.layout_ratio_pct = int(round(clamp_float(
+            self.layout_ratio_pct, *LAYOUT_RATIO_RANGE, LAYOUT_RATIO_DEFAULT)))
         if self.cut_guide not in CUT_GUIDE_KEYS:
             self.cut_guide = "none"
         if self.bleed_mode not in BLEED_MODE_KEYS:
@@ -902,6 +922,9 @@ class LayoutConfig:
         return {k: getattr(self, k) for k in self.PRESET_FIELDS}
 
     def nup(self) -> int:
+        """Células por folha: os slots da moldura, ou colunas × linhas na grade."""
+        if self.layout != "grid":
+            return frame_slot_count(self.layout)
         return max(1, self.cols) * max(1, self.rows)
 
 
@@ -929,6 +952,9 @@ class SheetGeometry(NamedTuple):
     mark_offset: float          # distância efetiva: nunca menor que a sangria
     grid: Rect                  # caixa que envolve todas as células
     warnings: List[Tuple[str, str]]
+    # Linhas de corte da moldura (no meio de cada espaçamento, atravessando só o
+    # pedaço que a divisão corta). Vazio na grade, que usa `cut_x`/`cut_y`.
+    cuts: Tuple[Segment, ...] = ()
 
 
 def _fmt_mm(v: float) -> str:
@@ -953,6 +979,8 @@ def sheet_geometry(cfg: "LayoutConfig") -> SheetGeometry:
     A sangria nunca invade a célula vizinha (vai até metade do espaçamento) nem
     passa da margem externa; as marcas ficam fora da grade, a `mark_offset` dela.
     """
+    if cfg.layout != "grid":
+        return frame_geometry(cfg)
     cols, rows = max(1, int(cfg.cols)), max(1, int(cfg.rows))
     mo  = max(0.0, float(cfg.margin_outer_mm))
     mbx = max(0.0, float(cfg.margin_between_x_mm))
@@ -1017,6 +1045,201 @@ def sheet_geometry(cfg: "LayoutConfig") -> SheetGeometry:
 
     return SheetGeometry(cells, bleeds, sides, cut_x, cut_y, marks, offset,
                          (gx0, gy0, gx1, gy1), warnings)
+
+# ── Molduras (DEC-018) ───────────────────────────────────────────────────────
+# Cada moldura é uma árvore de divisões sucessivas: `None` é um slot e
+# `("v" | "h", [(peso, filho), ...])` reparte o retângulo em partes lado a lado
+# («v», corta na vertical) ou empilhadas («h»). Só guilhotina: dá para cortar.
+
+FrameNode = Any
+_EPS = 1e-6
+
+
+def frame_tree(key: str, ratio_pct: float) -> FrameNode:
+    """Árvore de divisões da moldura `key`; `ratio_pct` é a proporção do LAYOUT_HINTS."""
+    r = clamp_float(ratio_pct, *LAYOUT_RATIO_RANGE, LAYOUT_RATIO_DEFAULT) / 100.0
+    two_side = ("v", [(1, None), (1, None)])
+    if key == "1+2":
+        return ("v", [(r, None), (1 - r, ("h", [(1, None), (1, None)]))])
+    if key == "2+1":
+        return ("h", [(r, two_side), (1 - r, None)])
+    if key == "1+3":
+        return ("h", [(r, None), (1 - r, ("v", [(1, None), (1, None), (1, None)]))])
+    if key == "destaque4":
+        return ("h", [(r, None), (1 - r, ("h", [(1, two_side), (1, two_side)]))])
+    if key == "1+2+1":
+        return ("h", [((1 - r) / 2, None), (r, two_side), ((1 - r) / 2, None)])
+    raise KeyError(f"moldura desconhecida: {key!r}")
+
+
+def _tree_slots(node: FrameNode) -> int:
+    if node is None:
+        return 1
+    return sum(_tree_slots(child) for _w, child in node[1])
+
+
+def frame_slot_count(key: str) -> int:
+    """Quantos slots a moldura tem (a proporção não muda a contagem)."""
+    return _tree_slots(frame_tree(key, LAYOUT_RATIO_DEFAULT))
+
+
+def _frame_walk(node: FrameNode, rect: Rect, ext: Rect, gx: float, gy: float,
+                cells: List[Rect], edges: List[Segment], centers: List[Segment]):
+    """Percorre a árvore: slots em ordem de leitura, bordas de corte e linhas.
+
+    `ext` é o `rect` ampliado até o meio do espaçamento vizinho (ou até a borda do
+    papel, nos lados que tocam a área útil): as linhas de corte correm por ele.
+    """
+    if node is None:
+        cells.append(rect)
+        return
+    axis, parts = node
+    x0, y0, x1, y1 = rect
+    ex0, ey0, ex1, ey1 = ext
+    n = len(parts)
+    gap = gx if axis == "v" else gy
+    lo, hi = (x0, x1) if axis == "v" else (y0, y1)
+    total = max(0.0, (hi - lo) - (n - 1) * gap)
+    wsum = sum(w for w, _c in parts)
+    spans: List[Tuple[float, float]] = []
+    pos = lo
+    for i, (w, _c) in enumerate(parts):
+        end = hi if i == n - 1 else pos + total * w / wsum
+        end = max(end, pos)
+        spans.append((pos, end))
+        pos = end + gap
+    for i, (_w, child) in enumerate(parts):
+        a, b = spans[i]
+        if axis == "v":
+            sub_rect = (a, y0, b, y1)
+            sub_ext = (ex0 if i == 0 else a - gap / 2, ey0,
+                       ex1 if i == n - 1 else b + gap / 2, ey1)
+        else:
+            sub_rect = (x0, a, x1, b)
+            sub_ext = (ex0, ey0 if i == 0 else a - gap / 2,
+                       ex1, ey1 if i == n - 1 else b + gap / 2)
+        if i < n - 1:
+            e1, e2 = b, spans[i + 1][0]          # as duas bordas do corte
+            mid = (e1 + e2) / 2
+            if axis == "v":
+                edges.append((e1, y0, e1, y1))
+                if e2 - e1 > _EPS:
+                    edges.append((e2, y0, e2, y1))
+                centers.append((mid, ey0, mid, ey1))
+            else:
+                edges.append((x0, e1, x1, e1))
+                if e2 - e1 > _EPS:
+                    edges.append((x0, e2, x1, e2))
+                centers.append((ex0, mid, ex1, mid))
+        _frame_walk(child, sub_rect, sub_ext, gx, gy, cells, edges, centers)
+
+
+def frame_cells(key: str, ratio_pct: float, rect: Rect,
+                gap_x: float, gap_y: float) -> Tuple[List[Rect], List[Segment]]:
+    """Slots (ordem de leitura) e bordas de corte internas da moldura em `rect`.
+
+    Em cada divisão o comprimento útil é o lado menos os espaçamentos, repartido
+    pelos pesos; partes lado a lado usam `gap_x`, empilhadas `gap_y`. Cada corte
+    com espaçamento > 0 devolve as suas duas bordas. Função pura (sem Tk nem Pillow).
+    """
+    cells: List[Rect] = []
+    edges: List[Segment] = []
+    _frame_walk(frame_tree(key, ratio_pct), rect, rect,
+                max(0.0, gap_x), max(0.0, gap_y), cells, edges, [])
+    return cells, edges
+
+
+def _tree_has(node: FrameNode, axis: str) -> bool:
+    if node is None:
+        return False
+    if node[0] == axis and len(node[1]) > 1:
+        return True
+    return any(_tree_has(child, axis) for _w, child in node[1])
+
+
+def frame_geometry(cfg: "LayoutConfig") -> SheetGeometry:
+    """`SheetGeometry` de uma moldura: slots, sangria por lado, marcas, linhas e avisos.
+
+    Mesmas regras da grade: a sangria vai até metade do espaçamento da divisão
+    vizinha ou até a margem externa, e as marcas ficam fora da área útil, uma por
+    ponta de corte que toca a borda dela (ponta que encosta noutro corte não leva).
+    """
+    mo  = max(0.0, float(cfg.margin_outer_mm))
+    mbx = max(0.0, float(cfg.margin_between_x_mm))
+    mby = max(0.0, float(cfg.margin_between_y_mm))
+    pw, ph = float(cfg.paper_w_mm), float(cfg.paper_h_mm)
+    rect: Rect = (mo, mo, max(mo, pw - mo), max(mo, ph - mo))
+    gx0, gy0, gx1, gy1 = rect
+
+    tree = frame_tree(cfg.layout, cfg.layout_ratio_pct)
+    cells: List[Rect] = []
+    edges: List[Segment] = []
+    centers: List[Segment] = []
+    _frame_walk(tree, rect, (0.0, 0.0, pw, ph), mbx, mby, cells, edges, centers)
+
+    bleed = clamp_float(cfg.bleed_mm, *BLEED_RANGE, 0.0)
+    length = clamp_float(cfg.mark_length_mm, *MARK_LEN_RANGE, 4.0)
+    offset = max(clamp_float(cfg.mark_offset_mm, *MARK_OFFSET_RANGE, 3.0), bleed)
+
+    bleeds: List[Rect] = []
+    sides: List[Tuple[float, float, float, float]] = []
+    for x0, y0, x1, y1 in cells:
+        l = min(bleed, mo if abs(x0 - gx0) <= _EPS else mbx / 2)
+        r = min(bleed, mo if abs(x1 - gx1) <= _EPS else mbx / 2)
+        t = min(bleed, mo if abs(y0 - gy0) <= _EPS else mby / 2)
+        b = min(bleed, mo if abs(y1 - gy1) <= _EPS else mby / 2)
+        sides.append((l, t, r, b))
+        bleeds.append((x0 - l, y0 - t, x1 + r, y1 + b))
+
+    cut_x = _unique_sorted([c[0] for c in cells] + [c[2] for c in cells])
+    cut_y = _unique_sorted([c[1] for c in cells] + [c[3] for c in cells])
+
+    marks: List[Segment] = []
+    if cfg.cut_guide == "marks":
+        # Os quatro lados da área útil também são cortes: dão as marcas dos cantos.
+        border = [(gx0, gy0, gx0, gy1), (gx1, gy0, gx1, gy1),
+                  (gx0, gy0, gx1, gy0), (gx0, gy1, gx1, gy1)]
+        seen = set()
+
+        def add(seg: Segment):
+            key = tuple(round(v, 6) for v in seg)
+            if key not in seen:           # espaçamento 0: dois cortes no mesmo lugar
+                seen.add(key)
+                marks.append(seg)
+
+        for x1_, y1_, x2_, y2_ in border + edges:
+            if abs(x1_ - x2_) <= _EPS:                         # corte vertical
+                if abs(y1_ - gy0) <= _EPS:
+                    add((x1_, gy0 - offset - length, x1_, gy0 - offset))
+                if abs(y2_ - gy1) <= _EPS:
+                    add((x1_, gy1 + offset, x1_, gy1 + offset + length))
+            else:                                              # corte horizontal
+                if abs(x1_ - gx0) <= _EPS:
+                    add((gx0 - offset - length, y1_, gx0 - offset, y1_))
+                if abs(x2_ - gx1) <= _EPS:
+                    add((gx1 + offset, y1_, gx1 + offset + length, y1_))
+
+    warnings: List[Tuple[str, str]] = []
+    if cfg.cut_guide == "marks" and mo + 1e-9 < offset + length:
+        warnings.append(("warn", "A margem externa precisa de pelo menos "
+                                 f"{_fmt_mm(offset + length)} mm para as marcas."))
+    if bleed > 0:
+        for axis, gap, nome in (("v", mbx, "colunas"), ("h", mby, "linhas")):
+            if _tree_has(tree, axis) and gap + 1e-9 < 2 * bleed:
+                warnings.append(("warn",
+                                 f"Espaçamento entre {nome} menor que 2× a sangria: "
+                                 f"entre as {nome} coube {_fmt_mm(gap / 2)} mm."))
+        if mo > 1e-9 and mo + 1e-9 < bleed:
+            warnings.append(("warn",
+                             f"A margem externa ({_fmt_mm(mo)} mm) é menor que a sangria "
+                             f"({_fmt_mm(bleed)} mm): na borda da folha, a sangria vai "
+                             f"só até {_fmt_mm(mo)} mm."))
+        if cfg.cut_guide == "lines":
+            warnings.append(("info", "Com sangria, use marcas de canto: "
+                                     "as linhas riscam a sangria."))
+
+    return SheetGeometry(cells, bleeds, sides, cut_x, cut_y, marks, offset,
+                         rect, warnings, tuple(centers))
 
 
 def cut_confirm_text(cfg: "LayoutConfig") -> Optional[str]:
@@ -1233,6 +1456,26 @@ class ImpositionEngine:
               - (rows-1)*self.cfg.margin_between_y_mm) / rows
         return max(0.0, cw), max(0.0, ch)
 
+    def slot_rects_mm(self) -> List[Rect]:
+        """Retângulo de cada slot em mm (ordem de leitura): moldura ou grade."""
+        return list(sheet_geometry(self.cfg).cells)
+
+    def slot_rects_px(self, dpi: Optional[int] = None) -> List[Tuple[int, int, int, int]]:
+        """Slots em px (x0, y0, x1, y1). As BORDAS são arredondadas uma vez a partir
+        dos mm — nunca somando larguras já arredondadas (CONTEXT, armadilha 12).
+        Na grade o tamanho é o de `cell_px`, que a composição usa."""
+        s = (dpi or self.cfg.dpi) * MM_TO_INCH
+
+        def px(v: float) -> int:
+            return int(math.floor(v * s + 0.5))
+
+        geo = sheet_geometry(self.cfg)
+        if self.cfg.layout == "grid":
+            cw, ch = self.cell_px(dpi)
+            return [(px(c[0]), px(c[1]), px(c[0]) + cw, px(c[1]) + ch)
+                    for c in geo.cells]
+        return [(px(c[0]), px(c[1]), px(c[2]), px(c[3])) for c in geo.cells]
+
     def bleed_px(self, dpi: Optional[int] = None) -> int:
         """Sangria configurada em px (0 = desligada), sem recorte pelo espaço livre."""
         return self._mm_px(clamp_float(self.cfg.bleed_mm, *BLEED_RANGE, 0.0), dpi)
@@ -1275,6 +1518,8 @@ class ImpositionEngine:
         PDF: o vetor também não, mas as imagens EMBUTIDAS na página ampliam — entram
         pela pior razão delas (sem `pypdfium2` ou com PDF ilegível o item sai da guarda).
         """
+        if self.cfg.layout != "grid":
+            return self._quality_report_frame()
         cw, ch = self.cell_px()
         # «A arte já tem sangria»: a fonte cobre a célula AUMENTADA pela sangria.
         bp = self.bleed_px_included()
@@ -1320,6 +1565,65 @@ class ImpositionEngine:
                  "warn" if worst_ratio >= QUALITY_WARN else "bad")
         return {"level": level, "ratio": worst_ratio, "worst": worst_name,
                 "cell": (cw, ch), "needed": (cw, ch)}
+
+    def _entry_ratio(self, e: "ImageEntry", cw: int,
+                     ch: int) -> Optional[Tuple[float, str]]:
+        """(razão fonte/célula, nome) de uma imagem contra um slot de `cw × ch` px;
+        None quando a guarda ignora o item (SVG, PDF sem backend ou ilegível)."""
+        if is_pdf(e.path):
+            if not PDF_OK:
+                return None
+            try:
+                r = pdf_inner_ratio(e.path, e.page_index, cw, ch,
+                                    self.cfg.auto_rotate, self.cfg.fit_mode,
+                                    e.rotation)
+            except Exception:
+                return None                   # PDF ilegível nunca derruba a guarda
+            if r is None:
+                return None
+            return r, f"{e.filename} · p. {e.page_index + 1} (imagem interna)"
+        if is_vector(e.path):
+            return None
+        size = e.real_size()
+        if not size:
+            return None
+        straight = min(size[0] / cw, size[1] / ch)
+        turned   = min(size[1] / cw, size[0] / ch)
+        if e.rotation:
+            r = turned if e.rotation in (90, 270) else straight
+        else:
+            r = max(straight, turned) if self.cfg.auto_rotate else straight
+        return r, e.filename
+
+    def _quality_report_frame(self) -> dict:
+        """Guarda de qualidade da moldura: cada imagem é medida contra o SLOT em que
+        cai (posição `i` da lista expandida → slot `i % nup`). `cell`/`needed` trazem
+        o slot da pior imagem, já com a sangria quando a arte a inclui."""
+        rects = self.slot_rects_px()
+        nup = len(rects)
+        bp = self.bleed_px_included()
+        sizes = [(max(1, x1 - x0) + 2 * bp, max(1, y1 - y0) + 2 * bp)
+                 for x0, y0, x1, y1 in rects]
+        worst_ratio = None
+        worst_name = ""
+        worst_slot = 0
+        pos = 0
+        for e in self.entries:
+            q = max(1, e.quantity)
+            slots = sorted({(pos + k) % nup for k in range(q)})
+            pos += q
+            for slot in slots:
+                got = self._entry_ratio(e, *sizes[slot])
+                if got is not None and (worst_ratio is None or got[0] < worst_ratio):
+                    worst_ratio, worst_name = got
+                    worst_slot = slot
+        if worst_ratio is None:
+            return {"level": "none", "ratio": 0.0, "worst": "",
+                    "cell": sizes[0], "needed": sizes[0]}
+        level = ("ok"   if worst_ratio >= QUALITY_OK else
+                 "warn" if worst_ratio >= QUALITY_WARN else "bad")
+        return {"level": level, "ratio": worst_ratio, "worst": worst_name,
+                "cell": sizes[worst_slot], "needed": sizes[worst_slot]}
 
     # ── Composição ───────────────────────────────────────────────────────────
 
@@ -1369,7 +1673,8 @@ class ImpositionEngine:
         return cell
 
     def _draw_cuts(self, page: Image.Image, cols: int, rows: int,
-                   cw: int, ch: int, mo: int, mbx: int, mby: int):
+                   cw: int, ch: int, mo: int, mbx: int, mby: int,
+                   segments: Optional[List[Tuple[int, int, int, int]]] = None):
         draw = ImageDraw.Draw(page)
         cfg  = self.cfg
         col  = cfg.cut_color
@@ -1409,6 +1714,11 @@ class ImpositionEngine:
 
         fn = {"Sólida": solid, "Tracejada": dashed, "Pontilhada": dotted}.get(
             cfg.cut_style, solid)
+
+        if segments is not None:         # moldura: cada linha é um segmento em px
+            for seg in segments:
+                fn(*seg)
+            return
 
         for c in range(1, cols):
             x = mo + c * cw + (c - 1) * mbx + (mbx // 2 if mbx > 0 else 0)
@@ -1491,6 +1801,8 @@ class ImpositionEngine:
         threads distintas sobre o MESMO LayoutConfig: gerar enquanto o preview
         compunha produzia a folha em 72 DPI, silenciosamente. Ver FIX-004.
         """
+        if self.cfg.layout != "grid":
+            return self._compose_frame(page_idx, image_paths, override_dpi)
         cfg = self.cfg
         cols, rows = self._grid()
         nup    = cols * rows
@@ -1577,6 +1889,114 @@ class ImpositionEngine:
             self._draw_marks(page, geo, dpi,
                              (min(org_x), min(org_y),
                               max(org_x) + cw, max(org_y) + ch))
+
+        return page
+
+    def _frame_bleed_px(self, geo: SheetGeometry, rects: List[Tuple[int, int, int, int]],
+                        pw: int, ph: int, dpi: int) -> List[Tuple[int, int, int, int]]:
+        """Sangria que coube em cada lado de cada slot, em px: a da geometria,
+        limitada à metade do vão REAL em px até o vizinho que está do outro lado
+        (ou à margem, na borda da folha). Assim nunca pinta pixel do vizinho."""
+        s = dpi * MM_TO_INCH
+        n = len(rects)
+        if self.bleed_px(dpi) <= 0:
+            return [(0, 0, 0, 0)] * n
+
+        def px(v: float) -> int:
+            return int(math.floor(v * s + 0.5))
+
+        def overlap(a0: float, a1: float, b0: float, b1: float) -> bool:
+            return b0 < a1 - _EPS and b1 > a0 + _EPS
+
+        out = []
+        for i in range(n):
+            cx0, cy0, cx1, cy1 = geo.cells[i]
+            rx0, ry0, rx1, ry1 = rects[i]
+            gaps = {"l": [], "t": [], "r": [], "b": []}
+            for j in range(n):
+                if j == i:
+                    continue
+                jx0, jy0, jx1, jy1 = geo.cells[j]
+                qx0, qy0, qx1, qy1 = rects[j]
+                if overlap(cy0, cy1, jy0, jy1):
+                    if jx1 <= cx0 + _EPS:
+                        gaps["l"].append(rx0 - qx1)
+                    if jx0 >= cx1 - _EPS:
+                        gaps["r"].append(qx0 - rx1)
+                if overlap(cx0, cx1, jx0, jx1):
+                    if jy1 <= cy0 + _EPS:
+                        gaps["t"].append(ry0 - qy1)
+                    if jy0 >= cy1 - _EPS:
+                        gaps["b"].append(qy0 - ry1)
+            edge = {"l": rx0, "t": ry0, "r": pw - rx1, "b": ph - ry1}
+            sl, st, sr, sb = (px(v) for v in geo.bleed_sides[i])
+            lim = {k: (min(g) // 2 if g else edge[k]) for k, g in gaps.items()}
+            out.append(tuple(max(0, min(v, lim[k]))
+                             for k, v in zip("ltrb", (sl, st, sr, sb))))
+        return out
+
+    def _compose_frame(self, page_idx: int, image_paths: List[Any],
+                       override_dpi: Optional[int] = None) -> Image.Image:
+        """Compõe uma folha de moldura. Mesmas regras da grade, mas cada slot tem o
+        seu retângulo: bordas arredondadas UMA vez a partir dos mm, tamanho derivado
+        delas, e cada imagem encaixada no seu slot (DEC-018)."""
+        cfg = self.cfg
+        dpi = override_dpi or cfg.dpi
+        pw, ph = self._page_px(override_dpi)
+        bg = self._hex_rgb(cfg.bg_color)
+        page = Image.new("RGB", (pw, ph), bg)
+
+        geo = sheet_geometry(cfg)
+        rects = self.slot_rects_px(override_dpi)
+        nup = len(rects)
+        bp_full = self.bleed_px(dpi)
+        sides = self._frame_bleed_px(geo, rects, pw, ph, dpi)
+
+        start = page_idx * nup
+        for slot in range(nup):
+            idx = start + slot
+            if idx >= len(image_paths):
+                break
+            x, y, x1, y1 = rects[slot]
+            cw, ch = max(1, x1 - x), max(1, y1 - y)
+            l, t, r, b = sides[slot]
+
+            try:
+                src = as_ref(image_paths[idx])
+                if bp_full > 0 and cfg.bleed_mode == "included":
+                    bw, bh = cw + 2 * bp_full, ch + 2 * bp_full
+                    img = open_source(src.path, bw, bh, page=src.page,
+                                      auto_rotate=cfg.auto_rotate,
+                                      fit_mode=cfg.fit_mode,
+                                      rotation=src.rotation)
+                    big = self._place_image(img, bw, bh, bg, src.rotation)
+                    cell = big.crop((bp_full - l, bp_full - t,
+                                     bp_full + cw + r, bp_full + ch + b))
+                else:
+                    img = open_source(src.path, cw, ch, page=src.page,
+                                      auto_rotate=cfg.auto_rotate,
+                                      fit_mode=cfg.fit_mode,
+                                      rotation=src.rotation)
+                    cell = self._mirror_extend(self._place_image(img, cw, ch, bg,
+                                                                 src.rotation),
+                                               l, t, r, b)
+            except Exception:
+                l = t = 0
+                cell = Image.new("RGB", (cw, ch), (200, 190, 190))
+                ImageDraw.Draw(cell).text(
+                    (4, max(0, ch // 2 - 8)), "Erro ao carregar", fill=(160, 30, 30))
+
+            page.paste(cell, (x - l, y - t))
+
+        if cfg.cut_guide == "lines":
+            s = dpi * MM_TO_INCH
+            segs = [tuple(int(math.floor(v * s + 0.5)) for v in seg)
+                    for seg in geo.cuts]
+            self._draw_cuts(page, 0, 0, 0, 0, 0, 0, 0, segments=segs)
+        elif cfg.cut_guide == "marks":
+            self._draw_marks(page, geo, dpi,
+                             (min(r_[0] for r_ in rects), min(r_[1] for r_ in rects),
+                              max(r_[2] for r_ in rects), max(r_[3] for r_ in rects)))
 
         return page
 

@@ -20,9 +20,6 @@
 ### 2026-11-10 — Página de download profissional no GitHub
 Publicar o app no GitHub como projeto «de verdade»: página de **Releases** com o executável para baixar, notas de versão e estrutura de repositório profissional. O executável é a 1.10.0 (ver «Empacotar como .exe»). **Dá para adiantar, sem executável:** criar as Releases das tags que já existem (`v1.0.0` … `v1.6.0`) com as notas do CHANGELOG, via `gh release create` no Code — uma WO curta, a qualquer momento. Baixar sem login exige o repositório público; hoje a visibilidade não foi conferida.
 
-### 2026-06 — Moldura de várias fotos (ex.: 2 horizontais iguais + 1 retrato alta)
-Layout não-uniforme tipo "moldura". Exige células de tamanhos diferentes — outro modelo que o grid regular. **Caso de uso do dono (04/11):** um fotógrafo pega uma série de fotos e monta, em segundos, várias molduras diferentes com as fotos variadas. **Decidido em 10/11 (DEC-018):** divisões sucessivas com catálogo pronto (`1 + 2`, `2 + 1`, `1 + 3`, `Destaque + 4`, `1 + 2 + 1`) e um controle de proporção por modelo; entra na **1.9.0**. Editor de divisões e arranjo por tamanho físico ficam para depois, sobre o mesmo modelo.
-
 ### 2026-06 — Fluxo "selecionar forma + selecionar imagens + gerar" (esforço mínimo)
 A meta-ideia que guia o produto: depois de exportar as artes — de qualquer ferramenta (Figma, Canva, Affinity, Photoshop, Corel, gerador web) ou de pegar fotos do celular —, só escolher um modo, selecionar as imagens e gerar. Conecta com presets, persistência e hot folder.
 
@@ -101,6 +98,7 @@ Executável Windows para quem não tem Python. **F5, 1.10.0, depois da moldura**
 
 ## ✅ Concluídas
 > Ideia que virou realidade. Mantida aqui para histórico (com referência à versão/decisão).
+- **Moldura de várias fotos** *(usuário, 2026-06; caso do fotógrafo em 04/11)* — implementada na 1.9.0 (F5, etapa 3): seletor Layout com `1 + 2`, `2 + 1`, `1 + 3`, `Destaque + 4` e `1 + 2 + 1`, proporção ajustável, divisões sucessivas (DEC-018). Editor de divisões e arranjo por tamanho físico ficam para depois.
 - **Rotação manual por imagem** *(assistente, 2026-06-15)* — implementada na 1.8.0 (F5, etapa 2): botão `⟳` por item; 0° segue o Auto-Rotate, 90/180/270° são exatos.
 - **Preenchimento automático para N folhas** *(assistente, 2026-06-15)* — implementado na 1.8.0: `Preencher ▾` com «Completar a última folha» e «Exatamente N folhas…», mexendo nas quantidades à vista.
 - **Drag-and-drop de arquivos na janela** *(assistente, 2026-06-15; pedido do dono em 07/11)* — implementado na 1.7.0 (F5, etapa 1): soltar arquivos e pastas em qualquer ponto da janela, via `tkinterdnd2` opcional (DEC-016).

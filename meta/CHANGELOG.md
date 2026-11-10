@@ -8,6 +8,20 @@
 
 ---
 
+## [1.9.0] — 2026-11-10
+Moldura por divisões sucessivas (wo0015, F5 etapa 3, DEC-018). A conferência na tela está com o dono.
+
+### Adicionado
+- Seletor **Layout** com `Grade` e cinco molduras (`1 + 2`, `2 + 1`, `1 + 3`, `Destaque + 4`, `1 + 2 + 1`), cada uma com uma **Proporção (%)** de 20 a 80 e dica do que ela mede. `layout` e `layout_ratio_pct` vão nos presets e na configuração; arquivo da 1.8 abre em `Grade`, 50%.
+- Geometria por árvore de divisões (`frame_cells`, `frame_geometry`): espaçamento por eixo, linhas de corte por segmento, marcas de canto só nas pontas que tocam a borda da área útil (11 na `1 + 2` sem espaçamento, 14 com), sangria limitada ao vizinho real em px e guarda de qualidade medida contra o slot de cada imagem.
+- Com moldura, Colunas/Linhas/Atalhos ficam apagados (valores preservados), a miniatura desenha os slots numerados e o rodapé diz `Células: n · menor …`.
+
+### Inalterado
+- A grade segue o caminho de sempre: 48 de 48 folhas com o mesmo SHA-256 da 1.8.1 (PNG, PDF sem perda, PDF JPEG e JPEG; marcas, sangria, linhas, rotação e PDF de entrada).
+- Testes: 221 → 243 (22 novos).
+
+---
+
 ## [1.8.1] — 2026-11-10
 Reorganização em dois módulos (wo0014, DEC-017). Nada muda para quem usa; o dono ainda vai abrir o app uma vez.
 

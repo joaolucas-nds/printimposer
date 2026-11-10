@@ -7,14 +7,14 @@
 ---
 
 ## Versão Atual
-**1.8.1** — 2026-11-10 — Reorganização: núcleo sem Tk em `imposer_core.py`, GUI em `print_imposer.py` (DEC-017). Saída idêntica à 1.8.0 (24 de 24 SHA-256). Suíte verde (221 testes; 5 skips de SVG). O dono abriu em 10/11: tudo igual.
+**1.9.0** — 2026-11-10 — Moldura por divisões sucessivas (DEC-018): seletor Layout com `Grade` e cinco molduras, proporção ajustável, corte/marcas/sangria/guarda por slot. A grade sai idêntica à 1.8.1 (48 de 48 SHA-256). Suíte verde (243 testes; 5 skips de SVG). Aguardando o roteiro do dono.
 
 ## 🎯 Foco atual
-**Produto:** F5 em curso (escada C). 1.7.0, 1.8.0 e 1.8.1 conferidas pelo dono em 10/11. Agora: **1.9.0 — moldura** (wo0015, DEC-018) — fecha o último item do critério da fase que falta.
+**Produto:** F5 em curso (escada C). 1.7.0, 1.8.0 e 1.8.1 conferidas pelo dono em 10/11. **1.9.0 — moldura** (wo0015, DEC-018) entregue, aguardando o roteiro do dono — fecha o último item do critério da fase que falta.
 **Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013). WO que muda a interface traz o roteiro do dono **no chat** e a linha `/apply-wo` em bloco cercado.
 
-## ✅ Funcionando *(suíte headless verde; 1.8.1 aberta pelo dono em 10/11, tudo igual)*
-- Grade livre `cols × rows` até 12×12, com atalhos e miniatura do grid.
+## ✅ Funcionando *(suíte headless verde; 1.9.0 aguardando o roteiro do dono)*
+- Layout: grade livre `cols × rows` até 12×12 (atalhos e miniatura) ou moldura (`1 + 2`, `2 + 1`, `1 + 3`, `Destaque + 4`, `1 + 2 + 1`) com proporção ajustável, DEC-018.
 - Lista de imagens com miniatura, quantidade, reordenação por ▲ ▼ ou arrastando pela alça `≡`; rotação por item com `⟳`; `Preencher ▾` (completar a última folha ou exatamente N folhas); "+ Arquivos" e "+ Pasta", ou soltar arquivos e pastas em qualquer ponto da janela (com `tkinterdnd2`; sem ele o cabeçalho diz `Arrastar: indisponível`).
 - Ajuste fit / fill / stretch + Auto-Rotate; rotação manual por item (0° segue o Auto-Rotate; 90/180/270° exatos).
 - Papéis A3/A4/A5/A6/Letter/Legal/Tabloid/Custom; DPI 72–1200; margens e cor de fundo.
@@ -34,13 +34,14 @@
 - Barra inferior mostra «Também grava em: …» com o segundo destino ligado (âmbar se inexistente ou temporário).
 
 ## 🔧 Em Progresso
-- 1.9.0 — moldura (wo0015, Parte B).
+- (vazio)
 
 ## ❌ Quebrado / Com Problema
 - (nada conhecido.)
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
+- [ ] **Dono:** roteiro da 1.9.0 (no chat e no fim de `meta/workorders/261110-wo0015-f5-moldura.md`).
 - [ ] **Chat:** depois do roteiro da 1.9.0, a frente seguinte da F5: 1.10.0 (executável + GitHub Releases); antes, confirmar com o dono se o repositório é público.
 - [ ] **Dono (opcional):** impressão de teste raster × vetorial numa **gráfica** de ponta (em casa, 06/11, a diferença só aparece de muito perto). Se o texto raster sair mole, reabre a vetorial (gatilho da DEC-015).
 - [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho», e a seção «Corte e sangria» com marcas de canto no preview (as capturas de 07/11 na pasta-pai servem).
@@ -52,3 +53,5 @@
 **2026-11-10 (Code)** — wo0014 aplicada: Parte A (docs, DEC-017 e DEC-018) e Parte B (1.8.1, divisão em `imposer_core.py` + `print_imposer.py`). Folhas idênticas à 1.8.0 por SHA-256; 16 patches de teste mudaram de alvo e um deles estava inerte. Falta o dono abrir o app (roteiro no chat).
 
 **2026-11-10 (20h)** — Dono abriu a 1.8.1: tudo igual. Chat atualizou CONTEXT (dois módulos, armadilha 13) e GLOSSARY (termos da F5) e escreveu a spec e a wo0015 da 1.9.0 (moldura).
+
+**2026-11-10 (Code)** — wo0015 aplicada: Parte A (docs, `af7bb8b`) e Parte B (1.9.0, moldura). Grade idêntica por SHA-256 (48 de 48), 221 → 243 testes. Achado fora da WO: no modo `fill`, `_place_image` pode deixar 1 linha preta (herança da grade; ver o log). Falta o dono rodar o roteiro.

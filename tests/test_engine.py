@@ -1043,7 +1043,7 @@ class MenuAndDialogTests(unittest.TestCase):
         self.assertLessEqual(pi.ConfigPanel.BOTTOM_H, 84)
 
     def test_versao(self):
-        self.assertEqual(pi.VERSION, "1.8.1")
+        self.assertEqual(pi.VERSION, "1.9.0")
 
 
 class StartupErrorTests(unittest.TestCase):
@@ -2347,6 +2347,236 @@ class CoreBoundaryTests(unittest.TestCase):
         with mock.patch.object(pi, "PDF_OK", False):     # cópia: o núcleo não vê
             self.assertNotEqual(nivel(), "none")
         self.assertIs(pi.ImpositionEngine, core.ImpositionEngine)
+
+
+class FrameGeometryTests(unittest.TestCase):
+    """Molduras por divisões sucessivas (F5 etapa 3, DEC-018) — geometria pura."""
+
+    A4 = (10.0, 10.0, 200.0, 287.0)
+
+    def _assert_rect(self, got, want):
+        for a, b in zip(got, want):
+            self.assertAlmostEqual(a, b, places=9)
+
+    def test_catalogo_e_contagem_de_slots(self):
+        esperado = {"1+2": 3, "2+1": 3, "1+3": 4, "destaque4": 5, "1+2+1": 4}
+        self.assertEqual(core.LAYOUT_KEYS[0], "grid")
+        self.assertEqual(len(core.LAYOUT_KEYS), len(core.LAYOUT_LABELS))
+        for key, n in esperado.items():
+            cells, _ = core.frame_cells(key, 50, self.A4, 0, 0)
+            self.assertEqual(len(cells), n, key)
+            self.assertEqual(core.frame_slot_count(key), n, key)
+            cfg = core.LayoutConfig()
+            cfg.layout = key
+            self.assertEqual(cfg.nup(), n, key)
+            self.assertIn(key, core.LAYOUT_HINTS)
+
+    def test_1_mais_2_sem_espacamento(self):
+        cells, _ = core.frame_cells("1+2", 50, self.A4, 0, 0)
+        self._assert_rect(cells[0], (10, 10, 105, 287))
+        self._assert_rect(cells[1], (105, 10, 200, 148.5))
+        self._assert_rect(cells[2], (105, 148.5, 200, 287))
+
+    def test_proporcao_muda_a_largura_da_primeira(self):
+        cells, _ = core.frame_cells("1+2", 60, self.A4, 0, 0)
+        self.assertAlmostEqual(cells[0][2] - cells[0][0], 0.6 * 190, places=9)
+
+    def test_espacamento_por_eixo(self):
+        cells, _ = core.frame_cells("1+2", 50, self.A4, 6, 6)
+        self.assertAlmostEqual(cells[0][2] - cells[0][0], 0.5 * (190 - 6), places=9)
+        for c in cells[1:]:
+            self.assertAlmostEqual(c[3] - c[1], (277 - 6) / 2, places=9)
+        # «v» usa o espaçamento X; «h» usa o Y.
+        cells, _ = core.frame_cells("1+2", 50, self.A4, 6, 0)
+        self.assertAlmostEqual(cells[1][3], cells[2][1], places=9)
+        self.assertAlmostEqual(cells[1][0] - cells[0][2], 6, places=9)
+
+    def test_1_mais_2_mais_1_faixas_iguais(self):
+        cells, _ = core.frame_cells("1+2+1", 50, self.A4, 0, 0)
+        self.assertAlmostEqual(cells[0][3] - cells[0][1], 0.25 * 277, places=9)
+        self.assertAlmostEqual(cells[-1][3] - cells[-1][1], 0.25 * 277, places=9)
+
+    def _cfg(self, layout="1+2", **kw):
+        cfg = core.LayoutConfig()
+        cfg.layout = layout
+        cfg.margin_outer_mm = 10.0
+        cfg.cut_guide = "marks"
+        for k, v in kw.items():
+            setattr(cfg, k, v)
+        return cfg
+
+    def test_marcas_da_1_mais_2(self):
+        self.assertEqual(len(core.sheet_geometry(self._cfg()).marks), 11)
+        cfg = self._cfg(margin_between_x_mm=6.0, margin_between_y_mm=6.0)
+        self.assertEqual(len(core.sheet_geometry(cfg).marks), 14)
+
+    def test_marcas_nao_cruzam_slot_nem_sangria(self):
+        for gap in (0.0, 6.0):
+            cfg = self._cfg(margin_between_x_mm=gap, margin_between_y_mm=gap,
+                            bleed_mm=3.0)
+            geo = core.sheet_geometry(cfg)
+            for x1, y1, x2, y2 in geo.marks:
+                for r in geo.cells + geo.bleeds:
+                    hit = (min(x1, x2) < r[2] and max(x1, x2) > r[0]
+                           and min(y1, y2) < r[3] and max(y1, y2) > r[1])
+                    self.assertFalse(hit, (gap, (x1, y1, x2, y2), r))
+
+    def test_sheet_geometry_delega_e_traz_cortes(self):
+        geo = core.sheet_geometry(self._cfg())
+        self.assertEqual(len(geo.cells), 3)
+        self.assertEqual(len(geo.cuts), 2)       # o vertical e o horizontal da direita
+        grade = core.sheet_geometry(core.LayoutConfig())
+        self.assertEqual(grade.cuts, ())
+
+    def test_linha_chega_a_borda_do_papel(self):
+        geo = core.sheet_geometry(self._cfg(cut_guide="lines"))
+        vertical = [c for c in geo.cuts if c[0] == c[2]][0]
+        self.assertEqual((vertical[1], vertical[3]), (0.0, 297.0))
+        horizontal = [c for c in geo.cuts if c[1] == c[3]][0]
+        self.assertAlmostEqual(horizontal[0], 105.0)    # nasce no corte vertical
+        self.assertAlmostEqual(horizontal[2], 210.0)    # vai até a borda do papel
+
+    def test_sangria_aviso_olha_os_eixos_da_moldura(self):
+        cfg = self._cfg(bleed_mm=3.0, margin_between_x_mm=1.0, margin_between_y_mm=1.0)
+        textos = [t for lvl, t in core.sheet_geometry(cfg).warnings if lvl == "warn"]
+        self.assertTrue(any("colunas" in t for t in textos))
+        self.assertTrue(any("linhas" in t for t in textos))
+
+
+class FrameConfigTests(unittest.TestCase):
+    def test_sem_campos_cai_em_grade_50(self):
+        cfg = core.LayoutConfig()
+        cfg.from_dict({"cols": 3})
+        self.assertEqual((cfg.layout, cfg.layout_ratio_pct), ("grid", 50))
+
+    def test_valores_invalidos(self):
+        cfg = core.LayoutConfig()
+        cfg.from_dict({"layout": "xyz", "layout_ratio_pct": 95})
+        self.assertEqual((cfg.layout, cfg.layout_ratio_pct), ("grid", 80))
+        cfg.from_dict({"layout_ratio_pct": 3})
+        self.assertEqual(cfg.layout_ratio_pct, 20)
+        cfg.from_dict({"layout_ratio_pct": "lixo"})
+        self.assertEqual(cfg.layout_ratio_pct, 50)
+        self.assertIsInstance(cfg.layout_ratio_pct, int)
+
+    def test_ida_e_volta(self):
+        cfg = core.LayoutConfig()
+        cfg.layout, cfg.layout_ratio_pct = "destaque4", 35
+        outra = core.LayoutConfig()
+        outra.from_dict(cfg.preset_dict())
+        self.assertEqual((outra.layout, outra.layout_ratio_pct), ("destaque4", 35))
+        snap_entries, snap = core.snapshot_for_generation([], cfg)
+        self.assertEqual((snap.layout, snap.layout_ratio_pct), ("destaque4", 35))
+
+    def test_campos_no_preset(self):
+        self.assertIn("layout", core.LayoutConfig.PRESET_FIELDS)
+        self.assertIn("layout_ratio_pct", core.LayoutConfig.PRESET_FIELDS)
+
+    def test_preencher_usa_o_nup_da_moldura(self):
+        cfg = core.LayoutConfig()
+        cfg.layout = "destaque4"
+        self.assertEqual(sum(core.fill_last_sheet([2, 2], cfg.nup())), 5)
+
+
+class FrameEngineTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def _cfg(self, layout="1+2", **kw):
+        cfg = core.LayoutConfig()
+        cfg.layout = layout
+        cfg.fit_mode = "fill"
+        cfg.dpi = 150
+        for k, v in kw.items():
+            setattr(cfg, k, v)
+        return cfg
+
+    def _entries(self, colors, size=(400, 400)):
+        out = []
+        for i, c in enumerate(colors):
+            out.append(core.ImageEntry(make_image(self.tmp / f"c{i}.png", *size, color=c)))
+        return out
+
+    def test_cada_slot_tem_a_sua_imagem_e_a_sangria_nao_pinta_o_vizinho(self):
+        cores = [(220, 20, 20), (20, 200, 20), (20, 20, 220)]
+        cfg = self._cfg(margin_outer_mm=10.0, margin_between_x_mm=6.0,
+                        margin_between_y_mm=6.0, bleed_mm=3.0, bleed_mode="mirror",
+                        dpi=300)
+        eng = core.ImpositionEngine(self._entries(cores), cfg)
+        page = eng.compose_page(0, eng._expand())
+        rects = eng.slot_rects_px()
+        self.assertEqual(len(rects), 3)
+        for (x0, y0, x1, y1), cor in zip(rects, cores):
+            region = page.crop((x0, y0, x1, y1))
+            self.assertEqual(region.getcolors(), [((x1 - x0) * (y1 - y0), cor)])
+        # A sangria existe: um pixel logo fora do slot da esquerda tem a cor dele.
+        x0, y0, x1, y1 = rects[0]
+        self.assertEqual(page.getpixel((x1 + 1, (y0 + y1) // 2)), cores[0])
+
+    def test_bordas_nao_somam_larguras_arredondadas(self):
+        cfg = self._cfg(margin_outer_mm=10.0, margin_between_x_mm=6.0,
+                        margin_between_y_mm=6.0)
+        eng = core.ImpositionEngine([], cfg)
+        mm = eng.slot_rects_mm()
+        s = cfg.dpi / 25.4
+        for (a, b, c, d), (x0, y0, x1, y1) in zip(mm, eng.slot_rects_px()):
+            self.assertEqual(x0, int(a * s + 0.5))
+            self.assertEqual(x1, int(c * s + 0.5))
+            self.assertEqual(y1, int(d * s + 0.5))
+
+    def test_total_de_folhas_usa_os_slots(self):
+        cfg = self._cfg("destaque4")
+        eng = core.ImpositionEngine(self._entries([(1, 2, 3)] * 1), cfg)
+        eng.entries[0].quantity = 6
+        self.assertEqual(eng.total_pages(), 2)
+
+    def test_guarda_mede_contra_o_slot_da_imagem(self):
+        cfg = self._cfg("1+3", dpi=300)
+        grande = make_image(self.tmp / "g.png", 5000, 4000)
+        pequena = make_image(self.tmp / "p.png", 1000, 700)
+        eng_a = core.ImpositionEngine([core.ImageEntry(pequena)], cfg)
+        eng_b = core.ImpositionEngine([core.ImageEntry(grande), core.ImageEntry(pequena)], cfg)
+        qa, qb = eng_a.quality_report(), eng_b.quality_report()
+        self.assertLess(qa["ratio"], qb["ratio"])        # slot 0 (grande) é mais exigente
+        x0, y0, x1, y1 = eng_a.slot_rects_px()[0]
+        self.assertEqual(qa["needed"], (x1 - x0, y1 - y0))
+        self.assertEqual(qa["cell"], qa["needed"])
+
+    def test_guarda_sem_imagem_e_none(self):
+        eng = core.ImpositionEngine([], self._cfg())
+        self.assertEqual(eng.quality_report()["level"], "none")
+
+    def test_linhas_e_marcas_desenham_sem_quebrar(self):
+        for guide in ("lines", "marks"):
+            cfg = self._cfg("destaque4", cut_guide=guide, margin_outer_mm=12.0,
+                            margin_between_x_mm=4.0, margin_between_y_mm=4.0)
+            eng = core.ImpositionEngine(self._entries([(9, 9, 9)] * 5), cfg)
+            page = eng.compose_page(0, eng._expand())
+            self.assertEqual(page.size, eng._page_px())
+
+    def test_marcas_pretas_14_componentes_na_1_mais_2(self):
+        cfg = self._cfg(cut_guide="marks", margin_outer_mm=10.0,
+                        margin_between_x_mm=6.0, margin_between_y_mm=6.0,
+                        bleed_mm=3.0, bleed_mode="mirror", dpi=300)
+        eng = core.ImpositionEngine(self._entries([(250, 250, 250)] * 3), cfg)
+        page = eng.compose_page(0, eng._expand()).convert("L")
+        w, h = page.size
+        black = page.point(lambda v: 255 if v < 40 else 0)
+        px = black.load()
+        seen, comps = set(), 0
+        for y in range(h):
+            for x in range(w):
+                if px[x, y] and (x, y) not in seen:
+                    comps += 1
+                    stack = [(x, y)]
+                    seen.add((x, y))
+                    while stack:
+                        cx, cy = stack.pop()
+                        for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
+                            if 0 <= nx < w and 0 <= ny < h and px[nx, ny] and (nx, ny) not in seen:
+                                seen.add((nx, ny))
+                                stack.append((nx, ny))
+        self.assertEqual(comps, 14)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-# 🖨 PrintImposer v1.8.1
+# 🖨 PrintImposer v1.9
 
 **Imposição de páginas para impressão em massa** — junte dezenas de imagens em folhas prontas para imprimir e cortar.
 
@@ -70,9 +70,9 @@ Use **`Opções › Criar atalho…`**. O diálogo explica o que o atalho faz e 
 ## 🖥 A janela
 
 ```
-┌ PrintImposer   Arquivo  Opções  Ajuda   v1.8.1 · SVG: … · PDF: … ┐
+┌ PrintImposer   Arquivo  Opções  Ajuda   v1.9.0 · SVG: … · PDF: … ┐
 ├────────────┬──────────────────────────────┬────────────────────────┤
-│ Imagens    │ Grade (colunas × linhas)  ◼◼ │ Preview         ◀  ▶   │
+│ Imagens    │ Layout: Grade ▾           ◼◼ │ Preview         ◀  ▶   │
 │            │ ┌ seções recolhíveis ──────┐ │                        │
 │ + Arquivos │ │ ▸ Papel e resolução      │ │                        │
 │ + Pasta    │ │ ▸ Ajuste da imagem       │ │                        │
@@ -104,7 +104,7 @@ A coluna do meio tem três zonas:
 
 **Dica:** para 4 cópias do mesmo card, adicione-o uma vez e ponha **Qtd = 4**. Para 10 folhas de uma série, use **Preencher ▾ › Exatamente N folhas…**.
 
-### Grade (topo)
+### Layout e grade (topo)
 Use `+`/`−` em **Colunas** e **Linhas**, ou digite os números e clique em **Aplicar valores digitados**. A miniatura ao lado mostra a ordem das células. O menu **Atalhos** tem as grades mais comuns:
 
 | Atalho | Grade |
@@ -119,6 +119,19 @@ Use `+`/`−` em **Colunas** e **Linhas**, ou digite os números e clique em **A
 | 16 por folha | 4 × 4 |
 
 Qualquer outra combinação até 12 × 12 funciona sem cadastro.
+
+### Molduras
+No seletor **Layout**, além de **Grade**, há molduras com células de tamanhos diferentes na mesma folha — para fotos, por exemplo. As imagens entram nos espaços na ordem da lista (a miniatura mostra os números), e todas as folhas do trabalho usam a mesma moldura.
+
+| Moldura | Forma | Fotos por folha | **Proporção (%)** mede |
+|---|---|---|---|
+| **1 + 2** | uma alta à esquerda, duas empilhadas à direita | 3 | a largura da foto da esquerda |
+| **2 + 1** | duas lado a lado em cima, uma larga embaixo | 3 | a altura da faixa de cima |
+| **1 + 3** | uma larga em cima, três embaixo | 4 | a altura da foto de cima |
+| **Destaque + 4** | uma larga em cima, 2 × 2 embaixo | 5 | a altura do destaque |
+| **1 + 2 + 1** | uma larga, duas lado a lado, uma larga | 4 | a altura da faixa do meio |
+
+Toda moldura se corta com cortes retos, pedaço por pedaço (guilhotina). Marcas de canto, sangria, espaçamento («entre colunas» para partes lado a lado, «entre linhas» para empilhadas), rotação por imagem e `Preencher ▾` funcionam igual à grade.
 
 ### Seções
 | Seção | Opções |
@@ -241,4 +254,4 @@ O motor de composição (`ImpositionEngine`) não depende da interface: testes e
 
 ---
 
-*PrintImposer v1.8.1 — uso pessoal/profissional de impressão em massa.*
+*PrintImposer v1.9.0 — uso pessoal/profissional de impressão em massa.*

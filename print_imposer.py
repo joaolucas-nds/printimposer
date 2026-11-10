@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PrintImposer v1.8.1
+PrintImposer v1.9.0
 Ferramenta de Imposição de Páginas para Impressão em Massa
 
 Selecione imagens, configure o layout e gere PDFs/PNGs prontos para impressão.
@@ -71,6 +71,12 @@ Novidades da 1.8 (fase F5, etapa 2 — SPEC-F5-tiragem):
     nas quantidades à vista
 
 Novidades da 1.8.1: o nucleo sem Tk foi para imposer_core.py (DEC-017); nada muda para quem usa.
+
+Novidades da 1.9 (fase F5, etapa 3 — SPEC-F5-moldura):
+  - Seletor «Layout»: Grade ou uma moldura (1 + 2, 2 + 1, 1 + 3, Destaque + 4,
+    1 + 2 + 1) com células de tamanhos diferentes na mesma folha (DEC-018)
+  - Uma «Proporção (%)» por moldura; as imagens entram nos espaços em ordem
+  - Corte, marcas de canto, sangria e guarda de qualidade por espaço
 """
 
 import os
@@ -157,6 +163,23 @@ class GridPreview(tk.Canvas):
                     self.create_text(pad + c * cw + cw / 2, pad + r * ch + ch / 2,
                                      text=str(r * cols + c + 1),
                                      fill="#8f9ec4", font=("Helvetica", 7))
+
+    def draw_frame(self, cells):
+        """Desenha uma moldura: `cells` são retângulos em fração da área (0–1),
+        numerados na ordem de leitura (a ordem em que as imagens entram)."""
+        self.delete("all")
+        pad = 5
+        iw = self._box_w - 2 * pad
+        ih = self._box_h - 2 * pad
+        self.create_rectangle(pad, pad, pad + iw, pad + ih,
+                              outline="#6b7ba8", fill="#2b2b3d")
+        for n, (x0, y0, x1, y1) in enumerate(cells, start=1):
+            X0, Y0 = pad + x0 * iw, pad + y0 * ih
+            X1, Y1 = pad + x1 * iw, pad + y1 * ih
+            self.create_rectangle(X0, Y0, X1, Y1, outline="#6b7ba8")
+            if X1 - X0 > 13 and Y1 - Y0 > 11:
+                self.create_text((X0 + X1) / 2, (Y0 + Y1) / 2, text=str(n),
+                                 fill="#8f9ec4", font=("Helvetica", 7))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -713,20 +736,42 @@ class ConfigPanel(ctk.CTkFrame):
         self._build_summary_zone(self._zone_bottom)
 
     def _build_grid_zone(self, f):
-        """Zona fixa do topo: a grade muda a cada trabalho, fica sempre à vista."""
+        """Zona fixa do topo: o layout muda a cada trabalho, fica sempre à vista."""
         f.columnconfigure(1, weight=1)
-        ctk.CTkLabel(f, text="Grade (colunas × linhas)", anchor="w",
+        ctk.CTkLabel(f, text="Layout", anchor="w",
                      font=ctk.CTkFont(size=12, weight="bold")).grid(
             row=0, column=0, columnspan=2, sticky="w", padx=4, pady=(2, 2))
 
+        self._lbl(f, "Layout:", 1)
+        self._layout_var = tk.StringVar(
+            value=LAYOUT_LABELS[LAYOUT_KEYS.index(self.cfg.layout)])
+        ctk.CTkOptionMenu(f, variable=self._layout_var, values=LAYOUT_LABELS,
+                          command=self._on_layout, width=170).grid(
+            row=1, column=1, sticky="w", padx=4)
+
+        # Proporção: só aparece com moldura (a grade não tem).
+        self._ratio_box = ctk.CTkFrame(f, fg_color="transparent")
+        self._ratio_box.grid(row=2, column=0, columnspan=2, sticky="ew")
+        self._lbl(self._ratio_box, "Proporção (%):", 0)
+        self._ratio_var = tk.StringVar(value=str(self.cfg.layout_ratio_pct))
+        self._num_entry(self._ratio_box, self._ratio_var, 0,
+                        cb=lambda _: self._on_ratio())
+        self._ratio_hint_var = tk.StringVar(value="")
+        ctk.CTkLabel(self._ratio_box, textvariable=self._ratio_hint_var, anchor="w",
+                     text_color=("gray50", "gray60"),
+                     font=ctk.CTkFont(size=10)).grid(
+            row=1, column=0, columnspan=2, sticky="w", padx=4)
+
         grid_box = ctk.CTkFrame(f, fg_color="transparent")
-        grid_box.grid(row=1, column=0, columnspan=2, sticky="ew")
+        grid_box.grid(row=3, column=0, columnspan=2, sticky="ew")
 
         spin_col = ctk.CTkFrame(grid_box, fg_color="transparent")
         spin_col.pack(side="left", padx=(0, 8))
 
         self._cols_var = tk.StringVar(value=str(self.cfg.cols))
         self._rows_var = tk.StringVar(value=str(self.cfg.rows))
+        # Controles da grade: ficam apagados (com os valores) quando há moldura.
+        self._grid_ctrls = []
 
         for label, var, delta_fn in (("Colunas", self._cols_var, "cols"),
                                      ("Linhas",  self._rows_var, "rows")):
@@ -734,27 +779,36 @@ class ConfigPanel(ctk.CTkFrame):
             line.pack(anchor="w", pady=1)
             ctk.CTkLabel(line, text=f"{label}:", width=54, anchor="w",
                          font=ctk.CTkFont(size=11)).pack(side="left")
-            ctk.CTkButton(line, text="-", width=24, height=24,
-                          command=lambda a=delta_fn: self._bump(a, -1)).pack(side="left")
-            ctk.CTkEntry(line, textvariable=var, width=42, justify="center",
-                         font=ctk.CTkFont(size=11)).pack(side="left", padx=2)
-            ctk.CTkButton(line, text="+", width=24, height=24,
-                          command=lambda a=delta_fn: self._bump(a, +1)).pack(side="left")
+            minus = ctk.CTkButton(line, text="-", width=24, height=24,
+                                  command=lambda a=delta_fn: self._bump(a, -1))
+            minus.pack(side="left")
+            entry = ctk.CTkEntry(line, textvariable=var, width=42, justify="center",
+                                 font=ctk.CTkFont(size=11))
+            entry.pack(side="left", padx=2)
+            plus = ctk.CTkButton(line, text="+", width=24, height=24,
+                                 command=lambda a=delta_fn: self._bump(a, +1))
+            plus.pack(side="left")
+            self._grid_ctrls += [minus, entry, plus]
 
-        ctk.CTkButton(spin_col, text="Aplicar valores digitados", height=24,
-                      font=ctk.CTkFont(size=10),
-                      command=self._apply_typed_grid).pack(anchor="w", pady=(4, 0))
+        apply_btn = ctk.CTkButton(spin_col, text="Aplicar valores digitados", height=24,
+                                  font=ctk.CTkFont(size=10),
+                                  command=self._apply_typed_grid)
+        apply_btn.pack(anchor="w", pady=(4, 0))
+        self._grid_ctrls.append(apply_btn)
 
         self.grid_preview = GridPreview(grid_box)
         self.grid_preview.pack(side="left")
-        self.grid_preview.draw(self.cfg.cols, self.cfg.rows)
 
-        self._lbl(f, "Atalhos:", 2)
+        self._lbl(f, "Atalhos:", 4)
         self._shortcut_var = tk.StringVar(value="—")
-        ctk.CTkOptionMenu(f, variable=self._shortcut_var,
-                          values=["—"] + list(NUP_SHORTCUTS.keys()),
-                          command=self._on_shortcut, width=170).grid(
-            row=2, column=1, sticky="w", padx=4)
+        self._shortcut_menu = ctk.CTkOptionMenu(
+            f, variable=self._shortcut_var,
+            values=["—"] + list(NUP_SHORTCUTS.keys()),
+            command=self._on_shortcut, width=170)
+        self._shortcut_menu.grid(row=4, column=1, sticky="w", padx=4)
+        self._grid_ctrls.append(self._shortcut_menu)
+
+        self._sync_layout_controls()
 
     def _build_summary_zone(self, f):
         """Zona fixa de baixo: feedback (contador, célula, qualidade), não config."""
@@ -1032,8 +1086,44 @@ class ConfigPanel(ctk.CTkFrame):
             self._sync_grid()
 
     def _sync_grid(self):
-        self.grid_preview.draw(self.cfg.cols, self.cfg.rows)
+        self._draw_mini()
         self._shortcut_var.set(self._matching_shortcut())
+        self.on_change()
+
+    def _draw_mini(self):
+        """Miniatura do layout: a grade, ou os slots da moldura numerados."""
+        if self.cfg.layout == "grid":
+            self.grid_preview.draw(self.cfg.cols, self.cfg.rows)
+        else:
+            cells, _ = frame_cells(self.cfg.layout, self.cfg.layout_ratio_pct,
+                                   (0.0, 0.0, 1.0, 1.0), 0.0, 0.0)
+            self.grid_preview.draw_frame(cells)
+
+    def _sync_layout_controls(self):
+        """Com moldura: apaga os controles da grade (valores preservados) e mostra
+        a proporção com a dica. Voltar à grade reativa tudo como estava."""
+        framed = self.cfg.layout != "grid"
+        for w in self._grid_ctrls:
+            w.configure(state="disabled" if framed else "normal")
+        if framed:
+            self._ratio_hint_var.set(LAYOUT_HINTS[self.cfg.layout])
+            self._ratio_box.grid()
+        else:
+            self._ratio_box.grid_remove()
+        self._draw_mini()
+
+    def _on_layout(self, label: str):
+        self.cfg.layout = LAYOUT_KEYS[LAYOUT_LABELS.index(label)]
+        self._sync_layout_controls()
+        self.on_change()
+
+    def _on_ratio(self):
+        """Proporção da moldura: fora da faixa vai ao limite; ilegível volta ao valor."""
+        self.cfg.layout_ratio_pct = int(round(clamp_float(
+            self._ratio_var.get().replace(",", "."), *LAYOUT_RATIO_RANGE,
+            self.cfg.layout_ratio_pct)))
+        self._ratio_var.set(str(self.cfg.layout_ratio_pct))
+        self._draw_mini()
         self.on_change()
 
     def _matching_shortcut(self) -> str:
@@ -1263,7 +1353,9 @@ class ConfigPanel(ctk.CTkFrame):
         """Reescreve todos os campos a partir do LayoutConfig (usado por preset)."""
         c = self.cfg
         self._cols_var.set(str(c.cols)); self._rows_var.set(str(c.rows))
-        self.grid_preview.draw(c.cols, c.rows)
+        self._layout_var.set(LAYOUT_LABELS[LAYOUT_KEYS.index(c.layout)])
+        self._ratio_var.set(str(c.layout_ratio_pct))
+        self._sync_layout_controls()
         self._shortcut_var.set(self._matching_shortcut())
         self._fit_var.set(FIT_LABELS[FIT_KEYS.index(c.fit_mode)])
         self._auto_var.set(c.auto_rotate)
@@ -1298,16 +1390,31 @@ class ConfigPanel(ctk.CTkFrame):
         self._sheet_info_var.set(
             f"{n_images} imagem(ns) · {self.cfg.nup()} por folha · {n_pages} folha(s)")
 
-        cw_mm, ch_mm = engine.cell_mm()
-        cw_px, ch_px = engine.cell_px()
-        self._cell_var.set(
-            f"Célula: {cw_mm:.1f} × {ch_mm:.1f} mm  ({cw_px} × {ch_px} px @ {self.cfg.dpi} DPI)")
+        framed = self.cfg.layout != "grid"
+        q = engine.quality_report()
+        if framed:
+            # O menor slot é o que limita a qualidade; mostra ele, em mm e em px.
+            mm_rects = engine.slot_rects_mm()
+            px_rects = engine.slot_rects_px()
+            k = min(range(len(mm_rects)),
+                    key=lambda i: (mm_rects[i][2] - mm_rects[i][0])
+                    * (mm_rects[i][3] - mm_rects[i][1]))
+            m = mm_rects[k]
+            pr = px_rects[k]
+            self._cell_var.set(
+                f"Células: {len(mm_rects)} · menor {m[2] - m[0]:.1f} × {m[3] - m[1]:.1f} mm"
+                f"  ({pr[2] - pr[0]} × {pr[3] - pr[1]} px @ {self.cfg.dpi} DPI)")
+            cw_px, ch_px = q["needed"]
+        else:
+            cw_mm, ch_mm = engine.cell_mm()
+            cw_px, ch_px = engine.cell_px()
+            self._cell_var.set(
+                f"Célula: {cw_mm:.1f} × {ch_mm:.1f} mm  ({cw_px} × {ch_px} px @ {self.cfg.dpi} DPI)")
 
         sw, sh, mb_raw = engine.sheet_info()
         self._sheet_var.set(
             f"Folha: {sw} × {sh} px · {mb_raw:.1f} MB bruto".replace(".", ","))
 
-        q = engine.quality_report()
         if q["level"] == "none":
             self._qual_var.set("")
             return

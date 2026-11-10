@@ -63,8 +63,8 @@
 **Objetivo:** facilitar adoção por quem não tem Python e soltar as amarras do grid regular.
 **Critério de conclusão:** executável Windows distribuível; manipulação por arraste; layout não-uniforme possível.
 **Ordem (escada C — `meta/analises/261109-ANALISE-ordem-f5.md`, aprovada em 10/11; o `.exe` foi para depois da moldura porque hoje só o dono usa o app):**
-- 🟡 **1.7.0 — Arrastar** (`meta/specs/261110-SPEC-F5-arrastar.md`, wo0012): soltar arquivos e pastas na janela (`tkinterdnd2` opcional, DEC-016); reordenar a lista arrastando pela alça; aviso âmbar de sangria externa limitada pela margem.
-- 🔵 **1.8.0 — Tiragem:** rotação manual por imagem (compondo com o Auto-Rotate); preencher N folhas.
+- ✅ **1.7.0 — Arrastar** (`meta/specs/261110-SPEC-F5-arrastar.md`, wo0012; roteiro do dono em 10/11: tudo certo, inclusive o soltar do Explorer sobre o preview): soltar arquivos e pastas na janela (`tkinterdnd2` opcional, DEC-016); reordenar a lista arrastando pela alça; aviso âmbar de sangria externa limitada pela margem.
+- 🟡 **1.8.0 — Tiragem** (`meta/specs/261110-SPEC-F5-tiragem.md`, wo0013): rotação manual por imagem (0° segue o Auto-Rotate; 90/180/270° são exatos); preencher folhas (completar a última; exatamente N folhas), mexendo nas quantidades à vista.
 - 🔵 **Portão da moldura:** análise própria — modelo das células (modelos prontos ou editor livre), cortes e marcas em layout não-uniforme, e se o arquivo único se divide (DEC-003; 3.519 linhas em 09/11). Pode correr em paralelo à 1.8.0.
 - 🔵 **1.9.0 — Moldura:** layout não-uniforme (moldura 2+1 de 3 fotos, e outras). Caso de uso do dono (04/11): um fotógrafo monta, em segundos, várias molduras diferentes com uma série de fotos. Generaliza `sheet_geometry` de grade para lista de retângulos.
 - 🔵 **1.10.0 — Executável e publicação:** PyInstaller `--onedir` (o CustomTkinter não empacota em arquivo único), com o hook do `tkinterdnd2`; publicado no **GitHub Releases** por GitHub Actions a cada tag — zip versionado, soma SHA-256 e notas tiradas do CHANGELOG. Sem assinatura de código, o Windows mostra o aviso do SmartScreen na primeira execução.

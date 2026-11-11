@@ -451,3 +451,13 @@ Uma moldura é uma **árvore de divisões**: cada nó divide o espaço em partes
 - O preset ganha um campo opcional (`layout`); ausente, vale a grade.
 - Um editor de divisões e o arranjo por tamanho físico podem vir depois sobre o mesmo formato, sem migração.
 - O desenhista vetorial da F5 desenha a geometria já generalizada, uma vez só.
+
+---
+
+## FIX-007 — Linha preta de 1 px no modo Preencher
+**Data:** 2026-11-10 · **Versão:** 1.9.1
+
+- **Sintoma:** no modo Preencher, com certos tamanhos de célula, saía uma linha preta de 1 px numa borda (achado do Code na wo0015, na grade 1×1 e na moldura).
+- **Causa raiz:** `_place_image` redimensionava para `int(lado × escala)`; com a escala exata da célula, o produto dava 1600,999… e o `int()` truncava para 1 px a menos. O `crop` da célula passava da borda da imagem, e o Pillow preenche o que falta com preto.
+- **Conserto:** no Preencher, o tamanho redimensionado nunca é menor que a célula (`max(nw, cw)`, `max(nh, ch)`). Os casos que não truncavam saem byte a byte iguais.
+- **Lição:** `int()` sobre um produto em ponto flutuante que «deveria» dar inteiro trunca para baixo; quando o resultado tem de cobrir uma área, garanta o mínimo explicitamente.

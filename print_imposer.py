@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-PrintImposer v1.9.0
+PrintImposer v1.9.1
 Ferramenta de Imposição de Páginas para Impressão em Massa
 
 Selecione imagens, configure o layout e gere PDFs/PNGs prontos para impressão.
@@ -77,6 +77,8 @@ Novidades da 1.9 (fase F5, etapa 3 — SPEC-F5-moldura):
     1 + 2 + 1) com células de tamanhos diferentes na mesma folha (DEC-018)
   - Uma «Proporção (%)» por moldura; as imagens entram nos espaços em ordem
   - Corte, marcas de canto, sangria e guarda de qualidade por espaço
+
+Novidades da 1.9.1: o modo Preencher não deixa mais uma linha preta de 1 px na borda da célula (FIX-007).
 """
 
 import os

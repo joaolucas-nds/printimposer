@@ -150,7 +150,7 @@ HEIF_OK: bool = _probe_heif()
 # CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════════
 
-VERSION  = "1.9.0"
+VERSION  = "1.9.1"
 APP_NAME = "PrintImposer"
 MM_TO_INCH = 1.0 / 25.4
 
@@ -1659,6 +1659,11 @@ class ImpositionEngine:
                  else min(cw / iw, ch / ih))
         nw = max(1, int(iw * scale))
         nh = max(1, int(ih * scale))
+        if cfg.fit_mode == "fill":
+            # `int()` trunca: 1500 × 1601/1500 dá 1600,999… → 1600, e o `crop`
+            # abaixo passaria 1 px da imagem — o Pillow pinta esse px de preto.
+            # No Preencher a imagem nunca pode ficar menor que a célula. FIX-007.
+            nw, nh = max(nw, cw), max(nh, ch)
         img = img.resize((nw, nh), Image.LANCZOS)
 
         if cfg.fit_mode == "fill":

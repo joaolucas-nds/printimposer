@@ -1,4 +1,4 @@
-# 🖨 PrintImposer v1.9
+# 🖨 PrintImposer v1.9.1
 
 **Imposição de páginas para impressão em massa** — junte dezenas de imagens em folhas prontas para imprimir e cortar.
 
@@ -70,7 +70,7 @@ Use **`Opções › Criar atalho…`**. O diálogo explica o que o atalho faz e 
 ## 🖥 A janela
 
 ```
-┌ PrintImposer   Arquivo  Opções  Ajuda   v1.9.0 · SVG: … · PDF: … ┐
+┌ PrintImposer   Arquivo  Opções  Ajuda   v1.9.1 · SVG: … · PDF: … ┐
 ├────────────┬──────────────────────────────┬────────────────────────┤
 │ Imagens    │ Layout: Grade ▾           ◼◼ │ Preview         ◀  ▶   │
 │            │ ┌ seções recolhíveis ──────┐ │                        │
@@ -254,4 +254,4 @@ O motor de composição (`ImpositionEngine`) não depende da interface: testes e
 
 ---
 
-*PrintImposer v1.9.0 — uso pessoal/profissional de impressão em massa.*
+*PrintImposer v1.9.1 — uso pessoal/profissional de impressão em massa.*

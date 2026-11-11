@@ -7,10 +7,12 @@
 ---
 
 ## Versão Atual
+**1.9.1** — 2026-11-10 — Conserto da linha preta de 1 px no modo Preencher (FIX-007, wo0016); aguardando o dono conferir uma folha. Suíte verde (248 testes; 5 skips de SVG).
+
 **1.9.0** — 2026-11-10 — Moldura por divisões sucessivas (DEC-018): seletor Layout com `Grade` e cinco molduras, proporção ajustável, corte/marcas/sangria/guarda por slot. A grade sai idêntica à 1.8.1 (48 de 48 SHA-256). Suíte verde (243 testes; 5 skips de SVG). Roteiro do dono feito em 10/11: tudo certo.
 
 ## 🎯 Foco atual
-**Produto:** F5 em curso (escada C). 1.7.0 a 1.9.0 conferidas pelo dono em 10/11; dos itens do critério da fase, falta só o executável (1.10.0). Agora: **1.9.1** (wo0016, FIX-007) — linha preta de 1 px no modo Preencher.
+**Produto:** F5 em curso (escada C). 1.7.0 a 1.9.0 conferidas pelo dono em 10/11; dos itens do critério da fase, falta só o executável (1.10.0). **1.9.1** (wo0016, FIX-007) entregue, aguardando o dono conferir uma folha.
 **Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013). WO que muda a interface traz o roteiro do dono **no chat** e a linha `/apply-wo` em bloco cercado.
 
 ## ✅ Funcionando *(suíte headless verde; roteiro do dono da 1.9.0 feito em 10/11, tudo certo)*
@@ -34,7 +36,7 @@
 - Barra inferior mostra «Também grava em: …» com o segundo destino ligado (âmbar se inexistente ou temporário).
 
 ## 🔧 Em Progresso
-- 1.9.1 — FIX-007 (wo0016, Parte B).
+- (vazio)
 
 ## ❌ Quebrado / Com Problema
 - (nada conhecido.)
@@ -54,3 +56,5 @@
 **2026-11-10 (20h)** — Dono abriu a 1.8.1: tudo igual. Chat atualizou CONTEXT (dois módulos, armadilha 13) e GLOSSARY (termos da F5) e escreveu a spec e a wo0015 da 1.9.0 (moldura).
 
 **2026-11-10 (Code)** — wo0015 aplicada: Parte A (docs, `af7bb8b`) e Parte B (1.9.0, moldura). Grade idêntica por SHA-256 (48 de 48), 221 → 243 testes. Achado fora da WO: no modo `fill`, `_place_image` pode deixar 1 linha preta (herança da grade; ver o log). Falta o dono rodar o roteiro.
+
+**2026-11-10 (Code)** — wo0016 aplicada: Parte A (docs, `79148ea`) e Parte B (1.9.1, FIX-007). No Preencher o tamanho redimensionado nunca é menor que a célula; 150 de 159 casos do harness iguais, os 9 diferentes eram todos com preto antes e sem preto depois. 243 → 248 testes.

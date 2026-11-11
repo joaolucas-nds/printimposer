@@ -1043,7 +1043,7 @@ class MenuAndDialogTests(unittest.TestCase):
         self.assertLessEqual(pi.ConfigPanel.BOTTOM_H, 84)
 
     def test_versao(self):
-        self.assertEqual(pi.VERSION, "1.9.0")
+        self.assertEqual(pi.VERSION, "1.9.1")
 
 
 class StartupErrorTests(unittest.TestCase):
@@ -2577,6 +2577,67 @@ class FrameEngineTests(unittest.TestCase):
                                 seen.add((nx, ny))
                                 stack.append((nx, ny))
         self.assertEqual(comps, 14)
+
+
+class FillBlackLineTests(unittest.TestCase):
+    """FIX-007 (1.9.1): no Preencher, `int()` truncava 1 px e o crop pintava de preto."""
+
+    COR = (200, 100, 50)
+
+    def _cfg(self, mode, cw, ch, **kw):
+        cfg = core.LayoutConfig()
+        cfg.cols = cfg.rows = 1
+        cfg.dpi = 72
+        cfg.paper_key = "Custom"
+        cfg.paper_w_mm = cw * 25.4 / 72
+        cfg.paper_h_mm = ch * 25.4 / 72
+        cfg.margin_outer_mm = cfg.margin_between_x_mm = cfg.margin_between_y_mm = 0.0
+        cfg.fit_mode = mode
+        cfg.cut_guide = "none"
+        cfg.bleed_mm = 0.0
+        cfg.auto_rotate = False
+        for k, v in kw.items():
+            setattr(cfg, k, v)
+        return cfg
+
+    def _place(self, mode, iw, ih, cw, ch, rotation=0):
+        eng = core.ImpositionEngine([], self._cfg(mode, cw, ch))
+        img = Image.new("RGBA", (iw, ih), self.COR + (255,))
+        return eng._place_image(img, cw, ch, (255, 255, 255), rotation)
+
+    def test_preencher_sem_pixel_preto_no_caso_do_bug(self):
+        cell = self._place("fill", 1500, 1500, 1086, 1601)
+        self.assertEqual(cell.size, (1086, 1601))
+        self.assertEqual(cell.getcolors(), [(1086 * 1601, self.COR)])
+
+    def test_preencher_celula_transposta_e_rotacao_manual(self):
+        for cw, ch, rot in ((1601, 1086, 0), (1086, 1601, 90), (1601, 1086, 90)):
+            cell = self._place("fill", 1500, 1500, cw, ch, rot)
+            self.assertEqual(cell.getcolors(), [(cw * ch, self.COR)], (cw, ch, rot))
+
+    def test_preencher_que_nao_truncava_continua_igual(self):
+        cell = self._place("fill", 2000, 1000, 1000, 500)
+        self.assertEqual(cell.getcolors(), [(1000 * 500, self.COR)])
+
+    def test_moldura_em_preencher_sem_linha_preta(self):
+        p = Path(tempfile.mkdtemp()) / "m.png"
+        Image.new("RGB", (1500, 1500), self.COR).save(p)
+        for layout in ("1+2", "2+1", "1+3", "destaque4", "1+2+1"):
+            cfg = self._cfg("fill", 1086, 1601, layout=layout)
+            eng = core.ImpositionEngine([core.ImageEntry(str(p))], cfg)
+            page = eng.compose_page(0, eng._expand())
+            for x0, y0, x1, y1 in eng.slot_rects_px():
+                cores = [c for _, c in page.crop((x0, y0, x1, y1)).getcolors()]
+                self.assertNotIn((0, 0, 0), cores, layout)
+
+    def test_ajustar_e_esticar_inalterados(self):
+        # Ajustar: imagem menor que a célula, sobra = fundo (nunca ampliada além dela).
+        cell = self._place("fit", 1500, 1500, 1086, 1601)
+        w, h = 1086, int(1500 * (1086 / 1500))
+        self.assertEqual(sorted(cell.getcolors()), sorted([(w * h, self.COR),
+                         (1086 * 1601 - w * h, (255, 255, 255))]))
+        cell = self._place("stretch", 1500, 1500, 1086, 1601)
+        self.assertEqual(cell.getcolors(), [(1086 * 1601, self.COR)])
 
 
 if __name__ == "__main__":

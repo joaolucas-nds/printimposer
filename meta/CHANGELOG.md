@@ -8,6 +8,14 @@
 
 ---
 
+## [1.9.1] — 2026-11-10
+Conserto da linha preta de 1 px no modo Preencher (wo0016, FIX-007). A conferência de uma folha está com o dono.
+
+### Corrigido
+- No modo **Preencher**, `_place_image` truncava o tamanho redimensionado (`int()`) e a imagem ficava 1 px menor que a célula; o recorte passava da borda e o Pillow pintava esse pixel de preto. Agora a imagem nunca fica menor que a célula (FIX-007). Ajustar e Esticar saem iguais.
+
+---
+
 ## [1.9.0] — 2026-11-10
 Moldura por divisões sucessivas (wo0015, F5 etapa 3, DEC-018). A conferência na tela está com o dono.
 

@@ -7,13 +7,13 @@
 ---
 
 ## Versão Atual
-**1.9.0** — 2026-11-10 — Moldura por divisões sucessivas (DEC-018): seletor Layout com `Grade` e cinco molduras, proporção ajustável, corte/marcas/sangria/guarda por slot. A grade sai idêntica à 1.8.1 (48 de 48 SHA-256). Suíte verde (243 testes; 5 skips de SVG). Aguardando o roteiro do dono.
+**1.9.0** — 2026-11-10 — Moldura por divisões sucessivas (DEC-018): seletor Layout com `Grade` e cinco molduras, proporção ajustável, corte/marcas/sangria/guarda por slot. A grade sai idêntica à 1.8.1 (48 de 48 SHA-256). Suíte verde (243 testes; 5 skips de SVG). Roteiro do dono feito em 10/11: tudo certo.
 
 ## 🎯 Foco atual
-**Produto:** F5 em curso (escada C). 1.7.0, 1.8.0 e 1.8.1 conferidas pelo dono em 10/11. **1.9.0 — moldura** (wo0015, DEC-018) entregue, aguardando o roteiro do dono — fecha o último item do critério da fase que falta.
+**Produto:** F5 em curso (escada C). 1.7.0 a 1.9.0 conferidas pelo dono em 10/11; dos itens do critério da fase, falta só o executável (1.10.0). Agora: **1.9.1** (wo0016, FIX-007) — linha preta de 1 px no modo Preencher.
 **Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013). WO que muda a interface traz o roteiro do dono **no chat** e a linha `/apply-wo` em bloco cercado.
 
-## ✅ Funcionando *(suíte headless verde; 1.9.0 aguardando o roteiro do dono)*
+## ✅ Funcionando *(suíte headless verde; roteiro do dono da 1.9.0 feito em 10/11, tudo certo)*
 - Layout: grade livre `cols × rows` até 12×12 (atalhos e miniatura) ou moldura (`1 + 2`, `2 + 1`, `1 + 3`, `Destaque + 4`, `1 + 2 + 1`) com proporção ajustável, DEC-018.
 - Lista de imagens com miniatura, quantidade, reordenação por ▲ ▼ ou arrastando pela alça `≡`; rotação por item com `⟳`; `Preencher ▾` (completar a última folha ou exatamente N folhas); "+ Arquivos" e "+ Pasta", ou soltar arquivos e pastas em qualquer ponto da janela (com `tkinterdnd2`; sem ele o cabeçalho diz `Arrastar: indisponível`).
 - Ajuste fit / fill / stretch + Auto-Rotate; rotação manual por item (0° segue o Auto-Rotate; 90/180/270° exatos).
@@ -34,15 +34,13 @@
 - Barra inferior mostra «Também grava em: …» com o segundo destino ligado (âmbar se inexistente ou temporário).
 
 ## 🔧 Em Progresso
-- (vazio)
+- 1.9.1 — FIX-007 (wo0016, Parte B).
 
 ## ❌ Quebrado / Com Problema
 - (nada conhecido.)
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
-- [ ] **Dono:** roteiro da 1.9.0 (no chat e no fim de `meta/workorders/261110-wo0015-f5-moldura.md`).
-- [ ] **Chat:** decidir se o achado da linha preta de 1 px no modo `fill` (`_place_image`, `int(ih*scale)`; reproduzido na grade 1×1, 1086×1601 px, imagem 1500×1500 — relatório da wo0015, item 5) vira WO própria.
 - [ ] **Chat:** depois do roteiro da 1.9.0, a frente seguinte da F5: 1.10.0 (executável + GitHub Releases); antes, confirmar com o dono se o repositório é público.
 - [ ] **Dono (opcional):** impressão de teste raster × vetorial numa **gráfica** de ponta (em casa, 06/11, a diferença só aparece de muito perto). Se o texto raster sair mole, reabre a vetorial (gatilho da DEC-015).
 - [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho», e a seção «Corte e sangria» com marcas de canto no preview (as capturas de 07/11 na pasta-pai servem).

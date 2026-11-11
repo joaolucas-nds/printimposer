@@ -88,6 +88,8 @@ A relação **qualidade × DPI**: a folha é rasterizada no DPI escolhido. Se a 
 
 13. **Fazer `mock.patch.object(pi, …)` num nome do núcleo** — `import print_imposer as pi` ainda enxerga tudo, então parece o alvo natural, mas `pi.X` é uma **cópia** do nome de `imposer_core`: trocar a cópia não muda o que as funções do núcleo leem, e o teste passa sem testar nada (na 1.8.1, o patch de `PDF_OK` estava assim). → Faça o patch no módulo que **lê** o nome (`imposer_core`, quase sempre). Ver DEC-017.
 
+14. **Arredondar com `int()` um tamanho que precisa cobrir a célula** — `int(1500 × 1601/1500)` parece dar 1601, mas o ponto flutuante dá 1600,999… e o `int()` trunca para 1600; no Preencher, o `crop` passava 1 px da imagem e o Pillow pintava esse px de **preto** (FIX-007, 1.9.1, na grade e na moldura). → Quando o resultado tem de cobrir uma área, garanta o mínimo explicitamente (`max(nw, cw)`), e confira por `getcolors()` que não há `(0, 0, 0)` que a arte não tem.
+
 ## 📁 Arquivos Críticos (não mexer sem contexto)
 > Conhecimento **estável**, não estado do agora — por isso vive aqui, e não no STATUS.
 - `imposer_core.py` — o motor, a geometria e o modelo. Antes de tocar na composição, ler «Como a imposição funciona» acima. `compose_page` **não muta `cfg`**: preview e geração compartilham o `LayoutConfig` entre threads (FIX-004).

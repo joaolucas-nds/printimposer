@@ -59,7 +59,7 @@
 - ✅ ~~Entrada SVG~~ — antecipada e entregue na 1.1.0.
 - ⏳ Nitidez em zoom 125%/150% — conferir quando houver monitor ou escala para testar (herdada da F3).
 
-## 🟡 F5 — Distribuição, fluidez e layouts livres *(em curso — ordem decidida em 10/11)*
+## 🟡 F5 — Distribuição, fluidez e layouts livres *(em pausa desde 10/11, por decisão do dono — projeto estável na 1.9.1; restam 1.10.0 e a vetorial)*
 **Objetivo:** facilitar adoção por quem não tem Python e soltar as amarras do grid regular.
 **Critério de conclusão:** executável Windows distribuível; manipulação por arraste; layout não-uniforme possível.
 **Ordem (escada C — `meta/analises/261109-ANALISE-ordem-f5.md`, aprovada em 10/11; o `.exe` foi para depois da moldura porque hoje só o dono usa o app):**
@@ -68,7 +68,7 @@
 - ✅ **Portão da moldura** (`meta/analises/261110-ANALISE-portao-moldura.md`, decidido em 10/11): modelo de **divisões sucessivas** (DEC-018) — cortável na guilhotina, grade = caso particular, catálogo inicial `1 + 2`, `2 + 1`, `1 + 3`, `Destaque + 4`, `1 + 2 + 1` com um controle de proporção por modelo; o arquivo único se divide (DEC-017).
 - ✅ **1.8.1 — Reorganização** (`meta/specs/261110-SPEC-F5-reorganizacao.md`, wo0014; 24 de 24 folhas com SHA-256 idêntico à 1.8.0; o dono abriu em 10/11: tudo igual): `imposer_core.py` (sem Tk) + `print_imposer.py` (GUI e `main()`), sem mudar comportamento — conferida por hash idêntico das folhas.
 - ✅ **1.9.0 — Moldura** (`meta/specs/261110-SPEC-F5-moldura.md`, wo0015; grade idêntica à 1.8.1 em 48 de 48 SHA-256; roteiro do dono em 10/11: tudo certo): layout não-uniforme (moldura 2+1 de 3 fotos, e outras). Caso de uso do dono (04/11): um fotógrafo monta, em segundos, várias molduras diferentes com uma série de fotos. Generaliza `sheet_geometry` de grade para lista de retângulos.
-- 🟡 **1.9.1 — Conserto da linha preta no modo Preencher** (wo0016, FIX-007): achado do Code na wo0015, vale também para a grade.
+- ✅ **1.9.1 — Conserto da linha preta no modo Preencher** (wo0016, FIX-007): achado do Code na wo0015, vale também para a grade. 150 de 159 casos do harness iguais; os 9 que mudaram tinham preto antes e não têm depois; o dono conferiu uma folha em 10/11: sem linha preta.
 - 🔵 **1.10.0 — Executável e publicação:** PyInstaller `--onedir` (o CustomTkinter não empacota em arquivo único), com o hook do `tkinterdnd2`; publicado no **GitHub Releases** por GitHub Actions a cada tag — zip versionado, soma SHA-256 e notas tiradas do CHANGELOG. Sem assinatura de código, o Windows mostra o aviso do SmartScreen na primeira execução.
 - 🔵 **Imposição vetorial do PDF** (vinda do portão da F4, DEC-015): modo «Vetorial» na compressão do PDF via `pypdf`, como segundo desenhista sobre a geometria já generalizada pela moldura. Ganho medido: nitidez do texto; tamanho ≈ igual ao raster. **Fora do critério:** se o gatilho (texto raster mole em gráfica) não disparar, passa à F6 sem reabrir nada; se disparar, sobe para logo depois da etapa em curso.
 - Cauda, sem versão: internacionalização (i18n); imprimir direto, sem salvar arquivo (API de impressão do Windows); marcas nos cantos internos (se pedido); nitidez em zoom 125%/150%.

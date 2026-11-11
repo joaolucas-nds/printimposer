@@ -7,12 +7,10 @@
 ---
 
 ## Versão Atual
-**1.9.1** — 2026-11-10 — Conserto da linha preta de 1 px no modo Preencher (FIX-007, wo0016); aguardando o dono conferir uma folha. Suíte verde (248 testes; 5 skips de SVG).
-
-**1.9.0** — 2026-11-10 — Moldura por divisões sucessivas (DEC-018): seletor Layout com `Grade` e cinco molduras, proporção ajustável, corte/marcas/sangria/guarda por slot. A grade sai idêntica à 1.8.1 (48 de 48 SHA-256). Suíte verde (243 testes; 5 skips de SVG). Roteiro do dono feito em 10/11: tudo certo.
+**1.9.1** — 2026-11-10 — Conserto da linha preta de 1 px no modo Preencher (FIX-007, wo0016). Suíte verde (248 testes; 5 skips de SVG). O dono conferiu uma folha em 10/11: sem linha preta.
 
 ## 🎯 Foco atual
-**Produto:** F5 em curso (escada C). 1.7.0 a 1.9.0 conferidas pelo dono em 10/11; dos itens do critério da fase, falta só o executável (1.10.0). **1.9.1** (wo0016, FIX-007) entregue, aguardando o dono conferir uma folha.
+**Produto:** ⏸ **Em stand by desde 10/11** (férias do dono). Estável na **1.9.1**: F1–F4 concluídas; da F5 estão feitas a 1.7.0 (arrastar), a 1.8.0 (tiragem), a 1.8.1 (dois módulos), a 1.9.0 (moldura) e a 1.9.1 (FIX-007), todas conferidas pelo dono. Restam, para a volta: **1.10.0** (executável + GitHub Releases — último item do critério da fase) e a **vetorial** (fora do critério; pode ir para a F6). Brief de retomada: `../261110-HANDOFF-BRIEF.md` (pasta-pai).
 **Processo:** KCM v1.133.0 — chat planeja com a pasta vinculada, Code implementa e empurra no verde (DEC-012, DEC-013). WO que muda a interface traz o roteiro do dono **no chat** e a linha `/apply-wo` em bloco cercado.
 
 ## ✅ Funcionando *(suíte headless verde; roteiro do dono da 1.9.0 feito em 10/11, tudo certo)*
@@ -43,7 +41,7 @@
 
 ## 📋 Backlog (curto prazo — itens acionáveis)
 > Só o que dá para pegar nos próximos turnos. Plano em fases vive no ROADMAP; ideias soltas no IDEAS.
-- [ ] **Chat:** depois do roteiro da 1.9.0, a frente seguinte da F5: 1.10.0 (executável + GitHub Releases); antes, confirmar com o dono se o repositório é público.
+- [ ] **Chat (na volta):** 1.10.0 — executável (PyInstaller `--onedir`) + GitHub Releases por GitHub Actions. Antes da spec, perguntar ao dono se o repositório `joaolucas-nds/printimposer` é público (só assim qualquer pessoa baixa sem login) e se quer adiantar as Releases das tags antigas (`v1.0.0` … `v1.9.1`) só com as notas.
 - [ ] **Dono (opcional):** impressão de teste raster × vetorial numa **gráfica** de ponta (em casa, 06/11, a diferença só aparece de muito perto). Se o texto raster sair mole, reabre a vetorial (gatilho da DEC-015).
 - [ ] **Dono (opcional):** prints para o README — a janela inteira com imagens carregadas, o menu `Opções` aberto, o diálogo «Criar atalho», e a seção «Corte e sangria» com marcas de canto no preview (as capturas de 07/11 na pasta-pai servem).
 - [ ] **Dono:** colar o `INSTRUCOES-DO-PROJETO.md` do repo no painel do Projeto — mudou em 04/11 (linha do `/apply-wo` e do roteiro).
@@ -51,10 +49,8 @@
 
 ## 💬 Última conversa
 
-**2026-11-10 (Code)** — wo0014 aplicada: Parte A (docs, DEC-017 e DEC-018) e Parte B (1.8.1, divisão em `imposer_core.py` + `print_imposer.py`). Folhas idênticas à 1.8.0 por SHA-256; 16 patches de teste mudaram de alvo e um deles estava inerte. Falta o dono abrir o app (roteiro no chat).
-
-**2026-11-10 (20h)** — Dono abriu a 1.8.1: tudo igual. Chat atualizou CONTEXT (dois módulos, armadilha 13) e GLOSSARY (termos da F5) e escreveu a spec e a wo0015 da 1.9.0 (moldura).
-
 **2026-11-10 (Code)** — wo0015 aplicada: Parte A (docs, `af7bb8b`) e Parte B (1.9.0, moldura). Grade idêntica por SHA-256 (48 de 48), 221 → 243 testes. Achado fora da WO: no modo `fill`, `_place_image` pode deixar 1 linha preta (herança da grade; ver o log). Falta o dono rodar o roteiro.
 
 **2026-11-10 (Code)** — wo0016 aplicada: Parte A (docs, `79148ea`) e Parte B (1.9.1, FIX-007). No Preencher o tamanho redimensionado nunca é menor que a célula; 150 de 159 casos do harness iguais, os 9 diferentes eram todos com preto antes e sem preto depois. 243 → 248 testes.
+
+**2026-11-10 (21h30)** — Dono conferiu a 1.9.1 (sem linha preta) e pôs o projeto em stand by. Chat fechou a sessão: ROADMAP (1.9.1 ✅, F5 em pausa), CONTEXT (armadilha 14), GLOSSARY (harness de folhas), CEREBRO (uma sessão limpa do Code por WO), IDEAS (duas ideias) e o brief de handoff na pasta-pai.

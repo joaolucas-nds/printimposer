@@ -70,6 +70,7 @@
 - **Divisões sucessivas** — o modelo da moldura: a área útil é dividida na vertical ou na horizontal, com proporções, e cada parte pode ser dividida de novo; cortável na guilhotina por construção. A grade `cols × rows` é o caso particular.
 - **Slot** — cada célula onde entra uma imagem; na moldura, cada slot tem o seu tamanho e é preenchido em ordem de leitura.
 - **Segmento de corte** — na moldura, o corte que atravessa só o pedaço da vez (não a folha inteira); as marcas vão nas pontas que tocam a borda da área útil.
+- **Harness de folhas (SHA-256)** — script do Code, fora do repo, que gera um conjunto fixo de folhas e guarda o SHA-256 de cada uma; roda antes e depois de uma mudança para provar que a saída não mudou (1.8.1, 1.9.0, 1.9.1). Hoje é refeito a cada WO (ver IDEAS, 2026-11-10).
 
 ## Ferramentas do fluxo de trabalho
 - **KCM / Kit de Contexto Universal** — o sistema de documentação (CEREBRO, CONTEXT, STATUS, DECISIONS…) que permite trocar de conversa sem perder contexto. Versão adotada: v1.133.0 (2026-11-03).

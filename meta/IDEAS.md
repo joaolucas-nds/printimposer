@@ -33,6 +33,12 @@ Mandar para a impressora sem arquivo intermediário. No Windows passa por API de
 
 ## 🤖 Ideias Ativas — Assistente
 
+### 2026-11-10 — Versionar o harness de folhas (SHA-256)
+As WOs 0014, 0015 e 0016 provaram «saída idêntica» com um script que gera folhas fixas e compara SHA-256 — e o script foi **refeito do zero a cada WO**, porque morava numa pasta temporária (relatórios da wo0015 e da wo0016: «o harness não existia»). Cada refazer é um conjunto diferente de casos (48, 48 com outra composição, 159). Proposta: guardar o gerador no repo (ex.: `tests/sheet_harness.py`), sem guardar os hashes (mudam com a versão do Pillow): o uso é rodar antes e depois na mesma máquina. Pequeno; candidato a entrar junto da próxima WO de código.
+
+### 2026-11-10 — Suspeita: transparência perdida no modo Preencher
+**Deduzido do código, não medido.** No `_place_image`, o Ajustar cola a imagem com a máscara alfa, mas o Preencher cola `img.convert("RGB")` sem máscara — numa PNG com fundo transparente, a área transparente sairia com a cor guardada no pixel (muitas vezes preto) em vez da cor de fundo. Conferir com uma PNG transparente em Preencher antes de tratar como bug; se confirmar, vira FIX com o mesmo padrão do FIX-007.
+
 ### 2026-11-07 — Marcas de corte nos cantos internos (entre células)
 Hoje (1.6.0) as marcas de canto ficam só na margem externa, uma por ponta de cada corte — o padrão de cartões em lote. Marca no cruzamento interno ajudaria quem corta com estilete célula a célula, mas com espaçamento pequeno cairia sobre a arte vizinha; ficou fora de escopo na spec da etapa 4. Só faz sentido com espaçamento ≥ 2 × (distância + comprimento). **F5, se pedido.**
 
